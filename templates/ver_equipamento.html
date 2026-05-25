@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ dispositivo.nome }} - EngLife</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2E8B57;
+            --primary-dark: #1e6b4a;
+            --secondary-color: #34495e;
+            --accent-color: #27ae60;
+            --light-bg: #f8f9fa;
+            --sidebar-width: 280px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fa;
+        }
+
+        .sidebar {
+            background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            height: 100vh;
+            position: fixed;
+            width: var(--sidebar-width);
+            transition: all 0.3s;
+            box-shadow: 3px 0 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar-brand {
+            padding: 2rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-brand .logo-icon {
+            font-size: 2rem;
+            margin-right: 0.5rem;
+        }
+
+        .sidebar-brand h2 {
+            font-weight: 700;
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            margin: 0.5rem 1rem;
+        }
+
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .nav-link i {
+            width: 20px;
+            margin-right: 0.75rem;
+        }
+
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .page-header {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border-left: 5px solid var(--accent-color);
+        }
+
+        .info-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border: none;
+            height: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .info-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .sensor-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border-left: 4px solid var(--accent-color);
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
+        }
+
+        .sensor-card:hover {
+            transform: translateX(5px);
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        .status-online {
+            background-color: var(--accent-color);
+            box-shadow: 0 0 10px rgba(39, 174, 96, 0.5);
+        }
+
+        .status-offline {
+            background-color: #95a5a6;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            border: none;
+            border-radius: 10px;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(46, 139, 87, 0.3);
+        }
+
+        .modal-content {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            border-radius: 15px 15px 0 0;
+            border: none;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            .main-content {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-seedling logo-icon"></i>
+                <h2>EngLife</h2>
+            </div>
+            <small class="text-white-50">Sistema Inteligente</small>
+        </div>
+
+        <div class="sidebar-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">
+                    <i class="fas fa-tachometer-alt"></i>
+                    Dashboard
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('equipamentos') }}" class="nav-link">
+                    <i class="fas fa-microchip"></i>
+                    Equipamentos
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-map-marker-alt"></i>
+                    Localizações
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('relatorios') }}" class="nav-link">
+                    <i class="fas fa-chart-line"></i>
+                    Relatórios
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-cog"></i>
+                    Configurações
+                </a>
+            </div>
+            <div class="nav-item mt-4">
+                <a href="{{ url_for('logout') }}" class="nav-link text-warning">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Sair do Sistema
+                </a>
+            </div>
+        </div>
+    </div>
+    {% if dispositivo.tipo_especifico == 'datalogger' %}
+    <a href="{{ url_for('ver_tempo_real', dispositivo_id=dispositivo.id) }}" class="btn btn-success btn-sm">
+        <i class="fas fa-chart-line me-1"></i>
+        Tempo Real
+    </a>
+    {% endif %}
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="display-6 fw-bold">
+                        {% if dispositivo.tipo_especifico == 'alimentador' %}
+                            <i class="fas fa-utensils me-3 text-danger"></i>
+                        {% elif dispositivo.tipo_especifico == 'datalogger' %}
+                            <i class="fas fa-chart-line me-3 text-info"></i>
+                        {% else %}
+                            <i class="fas fa-microchip me-3 text-primary"></i>
+                        {% endif %}
+                        {{ dispositivo.nome }}
+                    </h1>
+                    <p class="lead text-muted mb-0">
+                        {{ dispositivo.descricao or 'Equipamento do sistema EngLife' }}
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="btn-group">
+                        <a href="{{ url_for('equipamentos') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>
+                            Voltar
+                        </a>
+                        <button class="btn btn-outline-danger" 
+                                data-bs-toggle="modal" 
+                                data-bs-target="#confirmDeleteModal"
+                                data-dispositivo-id="{{ dispositivo.id }}"
+                                data-dispositivo-nome="{{ dispositivo.nome }}"
+                                data-dispositivo-tipo="{{ dispositivo.tipo_especifico }}"
+                                data-localizacao="{{ dispositivo.localizacao_nome }}">
+                            <i class="fas fa-trash me-2"></i>
+                            Excluir
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mensagens Flash -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show mb-4" role="alert">
+                        <i class="fas fa-{% if category == 'success' %}check-circle{% else %}exclamation-triangle{% endif %} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="row">
+            <!-- Informações do Equipamento -->
+            <div class="col-lg-6 mb-4">
+                <div class="info-card">
+                    <h4 class="mb-4 text-gradient">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Informações Gerais
+                    </h4>
+                    
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <strong class="text-muted d-block">Tipo</strong>
+                            {% if dispositivo.tipo_especifico == 'alimentador' %}
+                                <span class="badge bg-danger fs-6">
+                                    <i class="fas fa-utensils me-1"></i>
+                                    Alimentador
+                                </span>
+                            {% elif dispositivo.tipo_especifico == 'datalogger' %}
+                                <span class="badge bg-info fs-6">
+                                    <i class="fas fa-chart-line me-1"></i>
+                                    Datalogger
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary fs-6">
+                                    <i class="fas fa-microchip me-1"></i>
+                                    Dispositivo
+                                </span>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-6 mb-3">
+                            <strong class="text-muted d-block">Status</strong>
+                            {% if dispositivo.online %}
+                                <span class="badge bg-success fs-6">
+                                    <span class="status-indicator status-online"></span>
+                                    Online
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary fs-6">
+                                    <span class="status-indicator status-offline"></span>
+                                    Offline
+                                </span>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-6 mb-3">
+                            <strong class="text-muted d-block">Localização</strong>
+                            <span class="fw-bold">{{ dispositivo.localizacao_nome }}</span>
+                        </div>
+                        
+                        <div class="col-6 mb-3">
+                            <strong class="text-muted d-block">Modelo</strong>
+                            <span>{{ dispositivo.modelo or 'Não especificado' }}</span>
+                        </div>
+                        
+                        <div class="col-12 mb-3">
+                            <strong class="text-muted d-block">MAC Address</strong>
+                            <code class="fs-6">{{ dispositivo.mac_address }}</code>
+                        </div>
+                        
+                        <div class="col-12 mb-3">
+                            <strong class="text-muted d-block">IP Address</strong>
+                            <span>{{ dispositivo.ip_address or 'Não configurado' }}</span>
+                        </div>
+                        
+                        <div class="col-6">
+                            <strong class="text-muted d-block">Criado em</strong>
+                            <small class="text-muted">
+                                {% if dispositivo.created_at %}
+                                    {{ dispositivo.created_at.strftime('%d/%m/%Y %H:%M') }}
+                                {% else %}
+                                    Data não disponível
+                                {% endif %}
+                            </small>
+                        </div>
+                        
+                        <div class="col-6">
+                            <strong class="text-muted d-block">Última atualização</strong>
+                            <small class="text-muted">
+                                {% if dispositivo.updated_at %}
+                                    {{ dispositivo.updated_at.strftime('%d/%m/%Y %H:%M') }}
+                                {% else %}
+                                    Data não disponível
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sensores (apenas para dataloggers) -->
+            {% if dispositivo.tipo_especifico == 'datalogger' %}
+            <div class="col-lg-6 mb-4">
+                <div class="info-card">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4 class="text-gradient mb-0">
+                            <i class="fas fa-thermometer-half me-2"></i>
+                            Sensores
+                        </h4>
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSensorModal">
+                            <i class="fas fa-plus me-2"></i>
+                            Adicionar Sensor
+                        </button>
+                    </div>
+
+                    {% if sensores %}
+                        <div class="sensors-list">
+                            {% for sensor in sensores %}
+                                <div class="sensor-card">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 class="mb-0 fw-bold">{{ sensor[1] }}</h6>
+                                        {% if sensor[6] %}
+                                            <span class="badge bg-success">Ativo</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inativo</span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="sensor-info">
+                                        <div class="row text-sm">
+                                            <div class="col-4">
+                                                <small class="text-muted">Tipo</small><br>
+                                                <strong>{{ sensor[2] }}</strong>
+                                            </div>
+                                            <div class="col-4">
+                                                <small class="text-muted">Unidade</small><br>
+                                                <strong>{{ sensor[3] }}</strong>
+                                            </div>
+                                            <div class="col-4">
+                                                <small class="text-muted">Posição</small><br>
+                                                <strong>{{ sensor[4] }}</strong>
+                                            </div>
+                                        </div>
+                                        
+                                        {% if sensor[5] %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">Endereço:</small><br>
+                                            <code class="text-sm">{{ sensor[5] }}</code>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-thermometer-empty fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Nenhum Sensor Cadastrado</h5>
+                            <p class="text-muted mb-3">
+                                Adicione sensores para começar a coletar dados.
+                            </p>
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSensorModal">
+                                <i class="fas fa-plus me-2"></i>
+                                Adicionar Primeiro Sensor
+                            </button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Modal para Adicionar Sensor -->
+    {% if dispositivo.tipo_especifico == 'datalogger' %}
+    <div class="modal fade" id="addSensorModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus me-2"></i>
+                        Adicionar Novo Sensor
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="{{ url_for('adicionar_sensor', dispositivo_id=dispositivo.id) }}" method="POST">
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="nome" class="form-label">Nome do Sensor *</label>
+                                <input type="text" class="form-control" id="nome" name="nome" 
+                                       placeholder="Ex: Sensor Umidade Solo" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="tipo" class="form-label">Tipo *</label>
+                                <select class="form-select" id="tipo" name="tipo" required>
+                                    <option value="temperatura">Temperatura</option>
+                                    <option value="umidade">Umidade</option>
+                                    <option value="pressao">Pressão</option>
+                                    <option value="luminosidade">Luminosidade</option>
+                                    <option value="ph">pH</option>
+                                    <option value="condutividade">Condutividade</option>
+                                    <option value="outro">Outro</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="unidade" class="form-label">Unidade *</label>
+                                <input type="text" class="form-control" id="unidade" name="unidade" 
+                                       placeholder="Ex: °C, %, ppm, lux" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="posicao" class="form-label">Posição *</label>
+                                <input type="text" class="form-control" id="posicao" name="posicao" 
+                                       placeholder="Ex: agua, estufa, solo, ar" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="endereco" class="form-label">Endereço do Sensor</label>
+                            <input type="text" class="form-control" id="endereco" name="endereco" 
+                                   placeholder="Endereço físico ou identificação única">
+                            <div class="form-text">
+                                Endereço físico do sensor (opcional). Se não informado, será gerado automaticamente.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-2"></i>
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>
+                            Adicionar Sensor
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Modal de Confirmação de Exclusão -->
+    <div class="modal fade" id="confirmDeleteModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Confirmar Exclusão
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center mb-4">
+                        <i class="fas fa-trash-alt fa-3x text-danger mb-3"></i>
+                        <h4 class="text-danger">Atenção!</h4>
+                    </div>
+                    
+                    <p class="text-center">
+                        Você está prestes a excluir o equipamento:
+                    </p>
+                    
+                    <div class="alert alert-warning text-center">
+                        <strong id="deleteEquipmentName" class="fs-5"></strong><br>
+                        <small>
+                            Tipo: <span id="deleteEquipmentType"></span><br>
+                            Localização: <span id="deleteEquipmentLocation"></span>
+                        </small>
+                    </div>
+                    
+                    <div class="alert alert-danger">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            Esta ação não pode ser desfeita!
+                        </h6>
+                        <p class="mb-0 small">
+                            Todos os dados relacionados a este equipamento serão permanentemente excluídos, 
+                            incluindo sensores, configurações e histórico.
+                        </p>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="confirmDeleteCheckbox">
+                        <label class="form-check-label text-danger fw-bold" for="confirmDeleteCheckbox">
+                            Sim, eu entendo e desejo excluir este equipamento permanentemente
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>
+                        Cancelar
+                    </button>
+                    <form id="deleteEquipmentForm" method="POST" style="display: inline;">
+                        <button type="submit" class="btn btn-danger" id="confirmDeleteButton" disabled>
+                            <i class="fas fa-trash me-2"></i>
+                            Excluir Permanentemente
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Configurar modal de exclusão
+        const confirmDeleteModal = document.getElementById('confirmDeleteModal');
+        const deleteEquipmentForm = document.getElementById('deleteEquipmentForm');
+        const confirmDeleteCheckbox = document.getElementById('confirmDeleteCheckbox');
+        const confirmDeleteButton = document.getElementById('confirmDeleteButton');
+        const deleteEquipmentName = document.getElementById('deleteEquipmentName');
+        const deleteEquipmentType = document.getElementById('deleteEquipmentType');
+        const deleteEquipmentLocation = document.getElementById('deleteEquipmentLocation');
+
+        if (confirmDeleteModal) {
+            confirmDeleteModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const dispositivoId = button.getAttribute('data-dispositivo-id');
+                const dispositivoNome = button.getAttribute('data-dispositivo-nome');
+                const dispositivoTipo = button.getAttribute('data-dispositivo-tipo');
+                const localizacao = button.getAttribute('data-localizacao');
+                
+                // Atualizar informações no modal
+                deleteEquipmentName.textContent = dispositivoNome;
+                deleteEquipmentType.textContent = dispositivoTipo === 'alimentador' ? 'Alimentador' : 'Datalogger';
+                deleteEquipmentLocation.textContent = localizacao;
+                
+                // Configurar o formulário de exclusão
+                deleteEquipmentForm.action = `/equipamentos/${dispositivoId}/excluir`;
+                
+                // Resetar checkbox e botão
+                confirmDeleteCheckbox.checked = false;
+                confirmDeleteButton.disabled = true;
+            });
+        }
+
+        // Controlar habilitação do botão de exclusão
+        if (confirmDeleteCheckbox) {
+            confirmDeleteCheckbox.addEventListener('change', function() {
+                confirmDeleteButton.disabled = !this.checked;
+            });
+        }
+    </script>
+</body>
+</html>

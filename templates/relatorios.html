@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatórios - EngLife</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2E8B57;
+            --primary-dark: #1e6b4a;
+            --secondary-color: #34495e;
+            --accent-color: #27ae60;
+            --light-bg: #f8f9fa;
+            --sidebar-width: 280px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fa;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            height: 100vh;
+            position: fixed;
+            width: var(--sidebar-width);
+            transition: all 0.3s;
+            box-shadow: 3px 0 15px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+
+        .sidebar-brand {
+            padding: 2rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-brand .logo-icon {
+            font-size: 2rem;
+            margin-right: 0.5rem;
+        }
+
+        .sidebar-brand h2 {
+            font-weight: 700;
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            margin: 0.5rem 1rem;
+        }
+
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .nav-link i {
+            width: 20px;
+            margin-right: 0.75rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 2rem;
+            min-height: 100vh;
+            background-color: #f5f7fa;
+        }
+
+        /* Page Header */
+        .page-header {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border-left: 5px solid var(--accent-color);
+        }
+
+        .page-header h1 {
+            color: var(--secondary-color);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Cards Gerais */
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            margin-bottom: 1.5rem;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+        }
+
+        .card-header {
+            background: white;
+            border-bottom: 2px solid var(--light-bg);
+            border-radius: 15px 15px 0 0 !important;
+            padding: 1.25rem 1.5rem;
+        }
+
+        .card-header h5 {
+            color: var(--secondary-color);
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .card-header h5 i {
+            margin-right: 0.5rem;
+            color: var(--primary-color);
+        }
+
+        /* Datalogger Cards */
+        .datalogger-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+            height: 100%;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .datalogger-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 10px 25px rgba(46, 139, 87, 0.15);
+        }
+
+        .datalogger-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 5px;
+            height: 100%;
+            background: var(--accent-color);
+            border-radius: 5px 0 0 5px;
+        }
+
+        .datalogger-card.online::before {
+            background: #28a745;
+        }
+
+        .datalogger-card.offline::before {
+            background: #dc3545;
+        }
+
+        .datalogger-title {
+            font-weight: 600;
+            color: var(--secondary-color);
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .datalogger-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+
+        .badge-online {
+            background-color: rgba(40, 167, 69, 0.15);
+            color: #28a745;
+        }
+
+        .badge-offline {
+            background-color: rgba(220, 53, 69, 0.15);
+            color: #dc3545;
+        }
+
+        .sensor-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            margin: 0.1rem;
+            border-radius: 6px;
+            display: inline-block;
+        }
+
+        .sensor-temperatura {
+            background-color: rgba(13, 110, 253, 0.15);
+            color: #0d6efd;
+        }
+
+        .sensor-umidade {
+            background-color: rgba(255, 193, 7, 0.15);
+            color: #ffc107;
+        }
+
+        .periodo-info {
+            background-color: var(--light-bg);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+        }
+
+        /* Chart Container */
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        /* Form Controls */
+        .form-control, .form-select {
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+            padding: 0.75rem 1rem;
+            transition: all 0.3s;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(46, 139, 87, 0.25);
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            border-radius: 10px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            border-color: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        /* Quick Actions */
+        .quick-action-btn {
+            background: white;
+            border: 2px solid transparent;
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            margin-bottom: 1rem;
+        }
+
+        .quick-action-btn:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-3px);
+        }
+
+        .quick-action-btn i {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        /* Tabela */
+        .table {
+            margin-bottom: 0;
+        }
+
+        .table th {
+            background-color: var(--light-bg);
+            border-top: none;
+            font-weight: 600;
+            color: var(--secondary-color);
+            padding: 1rem;
+        }
+
+        .table td {
+            padding: 0.75rem 1rem;
+            vertical-align: middle;
+        }
+
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: rgba(0, 0, 0, 0.02);
+        }
+
+        /* Alerts */
+        .alert {
+            border-radius: 10px;
+            border: none;
+            padding: 1rem 1.5rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+        }
+
+        /* Loading Spinner */
+        .spinner-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+        }
+
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            color: var(--primary-color);
+        }
+
+        /* User Info */
+        .user-info-section {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .user-info-section .user-avatar {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-seedling logo-icon"></i>
+                <h2>EngLife</h2>
+            </div>
+            <small class="text-white-50">Sistema Inteligente</small>
+        </div>
+
+        <div class="sidebar-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">
+                    <i class="fas fa-tachometer-alt"></i>
+                    Dashboard
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('localizacoes') }}" class="nav-link">
+                    <i class="fas fa-map-marker-alt"></i>
+                    Localizações
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('equipamentos') }}" class="nav-link">
+                    <i class="fas fa-microchip"></i>
+                    Equipamentos
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('relatorios') }}" class="nav-link active">
+                    <i class="fas fa-chart-line"></i>
+                    Relatórios
+                </a>
+            </div>
+            
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-cog"></i>
+                    Configurações
+                </a>
+            </div>
+
+            <!-- Informações do Usuário -->
+            <div class="nav-item mt-4 p-3" style="border-top: 1px solid rgba(255,255,255,0.1);">
+                <div class="text-white">
+                    <small class="d-block">
+                        <i class="fas fa-user me-1"></i>
+                        {{ session.get('usuario_nome', 'Usuário') }}
+                    </small>
+                    <small class="text-white-50 d-block mt-1">
+                        {{ session.get('usuario_tipo', 'usuário')|title }}
+                    </small>
+                </div>
+            </div>
+
+            <div class="nav-item">
+                <a href="{{ url_for('logout') }}" class="nav-link text-warning">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Sair do Sistema
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1>
+                        <i class="fas fa-chart-line me-2"></i>
+                        Relatórios de Temperatura
+                    </h1>
+                    <p class="lead text-muted mb-0">
+                        Visualize e analise dados de temperatura dos seus equipamentos
+                    </p>
+                </div>
+                <div class="col-md-4">
+                    <div class="user-info">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ session.get('usuario_nome', 'Usuário') }}</strong>
+                                <div class="badge bg-primary mt-1">{{ session.get('usuario_tipo', 'usuário')|title }}</div>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-success">
+                                    <i class="fas fa-circle me-1"></i>
+                                    Sessão Ativa
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mensagens Flash -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show mb-4" role="alert">
+                        <i class="fas fa-{% if category == 'success' %}check-circle{% else %}exclamation-triangle{% endif %} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Quick Actions -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="quick-action-btn" onclick="testeGraficoBasico()">
+                    <i class="fas fa-check-circle text-warning"></i>
+                    <h6 class="mb-1">Testar Gráfico Básico</h6>
+                    <small class="text-muted">Verifique se o gráfico funciona</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="quick-action-btn" onclick="testeGraficoComDados()">
+                    <i class="fas fa-chart-line text-info"></i>
+                    <h6 class="mb-1">Testar com Dados</h6>
+                    <small class="text-muted">Visualize dados simulados</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <a href="{{ url_for('resumo_dados') }}" class="quick-action-btn text-decoration-none d-block">
+                    <i class="fas fa-chart-bar text-primary"></i>
+                    <h6 class="mb-1">Resumo de Dados</h6>
+                    <small class="text-muted">Estatísticas completas</small>
+                </a>
+            </div>
+            <div class="col-md-3">
+                <div class="quick-action-btn" onclick="window.location.reload()">
+                    <i class="fas fa-sync-alt text-success"></i>
+                    <h6 class="mb-1">Atualizar Dados</h6>
+                    <small class="text-muted">Recarregar informações</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seleção de Datalogger -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-microchip me-2"></i>Selecione um Datalogger</h5>
+            </div>
+            <div class="card-body">
+                {% if not dataloggers %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Nenhum datalogger encontrado.
+                        {% if session.usuario_tipo == 'admin' %}
+                            <a href="{{ url_for('cadastrar_equipamento') }}" class="alert-link ms-1">Cadastre um datalogger</a> para começar.
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <div class="row">
+                        {% for datalogger in dataloggers %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="datalogger-card {{ 'online' if datalogger.online else 'offline' }}" 
+                                 onclick="selecionarDatalogger({{ datalogger.id }})">
+                                <div class="datalogger-title">
+                                    <span><i class="fas fa-cpu me-2"></i>{{ datalogger.nome }}</span>
+                                    <span class="datalogger-badge {{ 'badge-online' if datalogger.online else 'badge-offline' }}">
+                                        {% if datalogger.online %}
+                                            <i class="fas fa-circle me-1"></i>Online
+                                        {% else %}
+                                            <i class="fas fa-circle me-1"></i>Offline
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                
+                                <p class="text-muted small mb-2">
+                                    <i class="fas fa-map-marker-alt me-1"></i>{{ datalogger.localizacao_nome }}
+                                </p>
+                                <p class="text-muted small mb-3">
+                                    <i class="fas fa-hashtag me-1"></i>MAC: {{ datalogger.mac_address }}
+                                </p>
+                                
+                                <!-- Sensores -->
+                                <div class="mb-3">
+                                    {% for sensor in datalogger.sensores %}
+                                    <span class="sensor-badge {{ 'sensor-temperatura' if sensor.tipo == 'temperatura' else 'sensor-umidade' }}"
+                                          title="{{ sensor.nome }} - {{ sensor.leituras }} leituras">
+                                        {{ sensor.posicao|upper }}
+                                        {% if sensor.leituras > 0 %}
+                                        <span class="badge bg-light text-dark ms-1">{{ sensor.leituras }}</span>
+                                        {% endif %}
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                                
+                                <!-- Período disponível -->
+                                {% if datalogger.periodo_inicio %}
+                                <div class="periodo-info">
+                                    <small>
+                                        <i class="fas fa-calendar-alt me-1"></i> 
+                                        <strong>Período disponível:</strong><br>
+                                        <span class="d-block mt-1">
+                                            {{ datalogger.periodo_inicio.split(' ')[0] }}<br>
+                                            até {{ datalogger.periodo_fim.split(' ')[0] }}
+                                        </span>
+                                        <span class="badge bg-primary mt-2">
+                                            <i class="fas fa-database me-1"></i>{{ datalogger.total_leituras }} leituras
+                                        </span>
+                                    </small>
+                                </div>
+                                {% else %}
+                                <div class="periodo-info">
+                                    <small class="text-muted">
+                                        <i class="fas fa-exclamation-circle me-1"></i> 
+                                        Nenhum dado disponível
+                                    </small>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Filtros e Gráfico -->
+        <div class="row">
+            <!-- Filtros -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros do Relatório</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="formRelatorio">
+                            <div class="mb-3">
+                                <label for="datalogger_id" class="form-label">Datalogger</label>
+                                <select class="form-select" id="datalogger_id" name="datalogger_id" required>
+                                    <option value="">Selecione um datalogger...</option>
+                                    {% for datalogger in dataloggers %}
+                                    <option value="{{ datalogger.id }}">
+                                        {{ datalogger.nome }} - {{ datalogger.localizacao_nome }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="data_inicio" class="form-label">Data Inicial</label>
+                                    <input type="date" class="form-control" id="data_inicio" name="data_inicio">
+                                    <div class="form-text small" id="periodo_inicio_info"></div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="data_fim" class="form-label">Data Final</label>
+                                    <input type="date" class="form-control" id="data_fim" name="data_fim">
+                                    <div class="form-text small" id="periodo_fim_info"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Informações do Período -->
+                            <div id="periodoInfo" class="alert alert-info d-none">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Período disponível:</strong>
+                                <span id="periodoDisponivelTexto" class="d-block mt-1"></span>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100 mt-3" id="btnGerarRelatorio">
+                                <i class="fas fa-chart-line me-2"></i>Gerar Relatório
+                            </button>
+                        </form>
+                        
+                        <!-- Loading -->
+                        <div id="loading" class="spinner-container d-none">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Carregando...</span>
+                            </div>
+                            <p class="mt-3 text-muted">Processando dados...</p>
+                        </div>
+                        
+                        <!-- Mensagem de erro -->
+                        <div id="mensagemErro" class="alert alert-danger d-none mt-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <span id="mensagemErroTexto"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Informações do Sistema -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Como usar</h6>
+                    </div>
+                    <div class="card-body">
+                        <ol class="small">
+                            <li class="mb-2">Selecione um datalogger da lista acima</li>
+                            <li class="mb-2">O sistema mostrará automaticamente o período disponível de dados</li>
+                            <li class="mb-2">Ajuste as datas se necessário (dentro do período disponível)</li>
+                            <li class="mb-2">Clique em "Gerar Relatório" para visualizar os dados</li>
+                            <li>Use os botões de teste para verificar o funcionamento dos gráficos</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Gráfico e Resultados -->
+            <div class="col-lg-8">
+                <!-- Informações do Relatório -->
+                <div id="infoRelatorio" class="card mb-4 d-none">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Resultados do Relatório</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row" id="dataloggerInfo"></div>
+                        <div class="row mt-3" id="estatisticasInfo"></div>
+                    </div>
+                </div>
+                
+                <!-- Gráfico -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Gráfico de Temperatura</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="graficoRelatorio"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tabela de Dados -->
+                <div class="card mt-4 d-none" id="tabelaDadosContainer">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-table me-2"></i>Dados em Tabela</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped" id="tabelaDados">
+                                <thead>
+                                    <tr>
+                                        <th><i class="fas fa-calendar me-1"></i> Data/Hora</th>
+                                        <th><i class="fas fa-thermometer me-1"></i> Sensor</th>
+                                        <th><i class="fas fa-temperature-high me-1"></i> Temperatura (°C)</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Variável global para armazenar o gráfico
+        window.meuGrafico = null;
+        
+        // 1. FUNÇÃO DE TESTE SIMPLES
+        function testeGraficoBasico() {
+            destruirGraficoCompletamente();
+            
+            const canvas = document.getElementById('graficoRelatorio');
+            if (!canvas) {
+                console.error('Canvas não encontrado!');
+                return;
+            }
+            
+            // Dados de teste simples
+            const data = {
+                labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai'],
+                datasets: [{
+                    label: 'Temperatura Teste (°C)',
+                    data: [22, 24, 23, 25, 26],
+                    borderColor: '#2E8B57',
+                    backgroundColor: 'rgba(46, 139, 87, 0.1)',
+                    borderWidth: 3,
+                    tension: 0.1,
+                    fill: true
+                }]
+            };
+            
+            try {
+                limparMensagens();
+                
+                window.meuGrafico = new Chart(canvas, {
+                    type: 'line',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: {
+                                    font: {
+                                        size: 14,
+                                        family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+                                    }
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: '✅ Gráfico de Teste Básico',
+                                font: {
+                                    size: 16,
+                                    weight: 'bold',
+                                    family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                title: {
+                                    display: true,
+                                    text: 'Temperatura (°C)',
+                                    font: {
+                                        size: 14
+                                    }
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                mostrarMensagemSucesso('Gráfico de teste básico criado com sucesso!');
+                console.log('✅ Gráfico de teste básico criado!');
+                
+            } catch (error) {
+                console.error('❌ Erro no gráfico de teste:', error);
+                mostrarMensagemErro(`Erro: ${error.message}`);
+            }
+        }
+        
+        // 2. FUNÇÃO DE TESTE COM DADOS SIMULADOS
+        function testeGraficoComDados() {
+            destruirGraficoCompletamente();
+            
+            const canvas = document.getElementById('graficoRelatorio');
+            if (!canvas) {
+                console.error('Canvas não encontrado!');
+                return;
+            }
+            
+            // Criar dados simulados para teste
+            const dadosSimulados = {
+                'agua': {
+                    nome: 'Sensor Água',
+                    dados: []
+                },
+                'estufa': {
+                    nome: 'Sensor Estufa',
+                    dados: []
+                },
+                'externa': {
+                    nome: 'Sensor Externa',
+                    dados: []
+                }
+            };
+            
+            // Gerar 24 pontos de dados simulados (um dia)
+            const dataAtual = new Date();
+            for (let i = 0; i < 24; i++) {
+                const data = new Date(dataAtual);
+                data.setHours(data.getHours() - i);
+                
+                dadosSimulados.agua.dados.push({
+                    x: data.toISOString(),
+                    y: 20 + Math.random() * 5
+                });
+                
+                dadosSimulados.estufa.dados.push({
+                    x: data.toISOString(),
+                    y: 25 + Math.random() * 10
+                });
+                
+                dadosSimulados.externa.dados.push({
+                    x: data.toISOString(),
+                    y: 22 + Math.random() * 8
+                });
+            }
+            
+            try {
+                criarGraficoComDadosSimples(dadosSimulados);
+                mostrarMensagemSucesso('Gráfico com dados simulados criado com sucesso!');
+                console.log('✅ Gráfico com dados simulados criado!', dadosSimulados);
+            } catch (error) {
+                console.error('❌ Erro no gráfico com dados simulados:', error);
+                mostrarMensagemErro(`Erro: ${error.message}`);
+            }
+        }
+        
+        // 3. FUNÇÃO SIMPLIFICADA PARA CRIAR GRÁFICO
+        function criarGraficoComDadosSimples(dados) {
+            destruirGraficoCompletamente();
+            
+            const canvas = document.getElementById('graficoRelatorio');
+            if (!canvas) {
+                console.error('❌ Canvas não encontrado!');
+                return null;
+            }
+            
+            // Verificar se há dados
+            let temDados = false;
+            for (const [posicao, info] of Object.entries(dados)) {
+                if (info.dados && info.dados.length > 0) {
+                    temDados = true;
+                    break;
+                }
+            }
+            
+            if (!temDados) {
+                mostrarMensagemErro('Nenhum dado disponível para o período selecionado.');
+                return null;
+            }
+            
+            // Preparar datasets
+            const datasets = [];
+            const cores = {
+                'agua': '#2E8B57',      // Verde
+                'estufa': '#DC3545',    // Vermelho
+                'externa': '#FFC107',   // Amarelo
+                'solo': '#6F42C1',      // Roxo
+                'ar': '#20C997'         // Verde água
+            };
+            
+            // Para cada sensor
+            for (const [posicao, info] of Object.entries(dados)) {
+                if (info.dados && info.dados.length > 0) {
+                    // Preparar arrays separados para labels e valores
+                    const labels = [];
+                    const valores = [];
+                    
+                    info.dados.forEach(ponto => {
+                        try {
+                            const data = new Date(ponto.x);
+                            // Formatar data para label
+                            labels.push(data.toLocaleDateString('pt-BR') + ' ' + 
+                                       data.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'}));
+                            valores.push(parseFloat(ponto.y));
+                        } catch (e) {
+                            console.warn('Erro ao processar ponto:', ponto, e);
+                        }
+                    });
+                    
+                    if (valores.length > 0) {
+                        datasets.push({
+                            label: info.nome || posicao,
+                            data: valores,
+                            borderColor: cores[posicao] || '#6C757D',
+                            backgroundColor: cores[posicao] ? cores[posicao] + '20' : '#6C757D20',
+                            tension: 0.1,
+                            fill: false,
+                            pointRadius: 4,
+                            pointHoverRadius: 7,
+                            borderWidth: 2
+                        });
+                        
+                        // Se não temos labels definidos ainda, usar os do primeiro sensor
+                        if (window.chartLabels === undefined && labels.length > 0) {
+                            window.chartLabels = labels;
+                        }
+                    }
+                }
+            }
+            
+            if (datasets.length === 0) {
+                mostrarMensagemErro('Nenhum dataset válido criado.');
+                return null;
+            }
+            
+            // Criar o gráfico com estrutura SIMPLES
+            try {
+                const data = {
+                    labels: window.chartLabels || Array.from({length: datasets[0].data.length}, (_, i) => `Ponto ${i+1}`),
+                    datasets: datasets
+                };
+                
+                window.meuGrafico = new Chart(canvas, {
+                    type: 'line',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: {
+                                    font: {
+                                        size: 12,
+                                        family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+                                    }
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Temperatura ao Longo do Tempo',
+                                font: {
+                                    size: 16,
+                                    weight: 'bold',
+                                    family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}°C`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Data/Hora',
+                                    font: {
+                                        size: 14,
+                                        family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+                                    }
+                                },
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45,
+                                    font: {
+                                        family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+                                    }
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Temperatura (°C)',
+                                    font: {
+                                        size: 14,
+                                        family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+                                    }
+                                },
+                                beginAtZero: false,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                console.log('✅ Gráfico criado com sucesso!', data);
+                return window.meuGrafico;
+                
+            } catch (error) {
+                console.error('❌ Erro ao criar gráfico:', error);
+                mostrarMensagemErro(`Erro ao criar gráfico: ${error.message}`);
+                return null;
+            }
+        }
+        
+        // 4. FUNÇÕES AUXILIARES
+        function destruirGraficoCompletamente() {
+            if (window.meuGrafico) {
+                try {
+                    window.meuGrafico.destroy();
+                } catch (e) {
+                    console.log('⚠️ Erro ao destruir gráfico:', e);
+                }
+                window.meuGrafico = null;
+            }
+            
+            const canvas = document.getElementById('graficoRelatorio');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            window.chartLabels = undefined;
+        }
+        
+        function limparMensagens() {
+            document.getElementById('mensagemErro').classList.add('d-none');
+            document.getElementById('mensagemErro').className = 'alert alert-danger d-none';
+            document.getElementById('mensagemErroTexto').textContent = '';
+        }
+        
+        function mostrarMensagemSucesso(texto) {
+            const mensagem = document.getElementById('mensagemErro');
+            mensagem.classList.remove('d-none');
+            mensagem.className = 'alert alert-success';
+            document.getElementById('mensagemErroTexto').innerHTML = `<i class="fas fa-check-circle me-1"></i>${texto}`;
+        }
+        
+        function mostrarMensagemErro(texto) {
+            const mensagem = document.getElementById('mensagemErro');
+            mensagem.classList.remove('d-none');
+            mensagem.className = 'alert alert-danger';
+            document.getElementById('mensagemErroTexto').innerHTML = `<i class="fas fa-exclamation-triangle me-1"></i>${texto}`;
+        }
+        
+        function formatarData(data) {
+            if (!data) return '';
+            try {
+                const dataObj = new Date(data);
+                return dataObj.toLocaleDateString('pt-BR') + ' ' + 
+                       dataObj.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+            } catch (e) {
+                return String(data);
+            }
+        }
+        
+        // 5. FUNÇÃO PARA SELECIONAR DATALOGGER
+        function selecionarDatalogger(id) {
+            limparMensagens();
+            document.getElementById('datalogger_id').value = id;
+            
+            // Destacar o card selecionado
+            document.querySelectorAll('.datalogger-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+            
+            fetch(`/relatorios/periodo/${id}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.periodo) {
+                        const periodo = data.periodo;
+                        try {
+                            const inicioDate = new Date(periodo.inicio);
+                            const fimDate = new Date(periodo.fim);
+                            
+                            document.getElementById('periodo_inicio_info').innerHTML = 
+                                `<i class="fas fa-calendar-plus me-1"></i>${formatarData(inicioDate)}`;
+                            document.getElementById('periodo_fim_info').innerHTML = 
+                                `<i class="fas fa-calendar-minus me-1"></i>${formatarData(fimDate)}`;
+                            
+                            document.getElementById('data_inicio').value = inicioDate.toISOString().split('T')[0];
+                            document.getElementById('data_fim').value = fimDate.toISOString().split('T')[0];
+                            
+                            const periodoInfo = document.getElementById('periodoInfo');
+                            periodoInfo.classList.remove('d-none');
+                            document.getElementById('periodoDisponivelTexto').innerHTML = 
+                                `${formatarData(inicioDate)} até ${formatarData(fimDate)}<br>
+                                <span class="badge bg-primary mt-1">
+                                    <i class="fas fa-database me-1"></i>${periodo.total_leituras} leituras
+                                </span>`;
+                        } catch (e) {
+                            console.error('Erro ao processar datas:', e);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao buscar período:', error);
+                    mostrarMensagemErro('Erro ao buscar período de dados.');
+                });
+        }
+        
+        // 6. EVENTO PARA GERAR RELATÓRIO
+        document.getElementById('formRelatorio').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const dataloggerId = formData.get('datalogger_id');
+            
+            if (!dataloggerId) {
+                mostrarMensagemErro('Por favor, selecione um datalogger!');
+                return;
+            }
+            
+            limparMensagens();
+            destruirGraficoCompletamente();
+            
+            document.getElementById('loading').classList.remove('d-none');
+            document.getElementById('btnGerarRelatorio').disabled = true;
+            
+            fetch('/relatorios/dados', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('loading').classList.add('d-none');
+                document.getElementById('btnGerarRelatorio').disabled = false;
+                
+                if (data.error) {
+                    mostrarMensagemErro(data.error);
+                    return;
+                }
+                
+                console.log('📊 Dados recebidos do servidor:', data);
+                
+                // Mostrar informações básicas
+                if (data.datalogger) {
+                    const dataloggerInfo = document.getElementById('dataloggerInfo');
+                    dataloggerInfo.innerHTML = `
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6><i class="fas fa-cpu text-primary"></i> Datalogger</h6>
+                                    <p class="mb-0 fw-bold">${data.datalogger.nome}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6><i class="fas fa-map-marker-alt text-success"></i> Localização</h6>
+                                    <p class="mb-0 fw-bold">${data.datalogger.localizacao}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6><i class="fas fa-thermometer-three-quarters text-info"></i> Sensores</h6>
+                                    <p class="mb-0 fw-bold">${data.datalogger.sensores} sensores</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('infoRelatorio').classList.remove('d-none');
+                
+                // Criar gráfico com os dados recebidos
+                if (data.dados) {
+                    criarGraficoComDadosSimples(data.dados);
+                    
+                    // Preencher tabela se houver dados
+                    preencherTabelaSimples(data.dados);
+                } else {
+                    mostrarMensagemErro('Nenhum dado retornado pelo servidor.');
+                }
+                
+            })
+            .catch(error => {
+                document.getElementById('loading').classList.add('d-none');
+                document.getElementById('btnGerarRelatorio').disabled = false;
+                mostrarMensagemErro(`Erro na requisição: ${error.message}`);
+                console.error('❌ Erro na requisição:', error);
+            });
+        });
+        
+        // 7. FUNÇÃO PARA PREENCHER TABELA SIMPLES
+        function preencherTabelaSimples(dados) {
+            const tbody = document.querySelector('#tabelaDados tbody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            
+            let todosDados = [];
+            
+            for (const [posicao, info] of Object.entries(dados)) {
+                if (info.dados && info.dados.length > 0) {
+                    info.dados.forEach(ponto => {
+                        try {
+                            todosDados.push({
+                                timestamp: new Date(ponto.x),
+                                sensor: info.nome || posicao,
+                                valor: parseFloat(ponto.y)
+                            });
+                        } catch (e) {
+                            console.warn('Erro ao processar ponto para tabela:', ponto);
+                        }
+                    });
+                }
+            }
+            
+            todosDados.sort((a, b) => a.timestamp - b.timestamp);
+            
+            if (todosDados.length === 0) {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td colspan="3" class="text-center text-muted py-4">
+                        <i class="fas fa-exclamation-circle fa-2x mb-2"></i><br>
+                        Nenhum dado encontrado.
+                    </td>
+                `;
+                return;
+            }
+            
+            // Mostrar apenas os primeiros 20 registros para não sobrecarregar
+            const mostrarDados = todosDados.slice(0, 20);
+            
+            mostrarDados.forEach(ponto => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${formatarData(ponto.timestamp)}</td>
+                    <td><span class="badge bg-info">${ponto.sensor}</span></td>
+                    <td><strong class="text-primary">${ponto.valor.toFixed(2)}°C</strong></td>
+                `;
+            });
+            
+            document.getElementById('tabelaDadosContainer').classList.remove('d-none');
+            
+            if (todosDados.length > 20) {
+                const infoRow = tbody.insertRow();
+                infoRow.innerHTML = `
+                    <td colspan="3" class="text-center text-muted py-2">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Mostrando 20 de ${todosDados.length} leituras.
+                    </td>
+                `;
+            }
+        }
+        
+        // 8. INICIALIZAÇÃO DA PÁGINA
+        document.addEventListener('DOMContentLoaded', function() {
+            const hoje = new Date();
+            const umaSemanaAtras = new Date();
+            umaSemanaAtras.setDate(hoje.getDate() - 7);
+            
+            document.getElementById('data_fim').value = hoje.toISOString().split('T')[0];
+            document.getElementById('data_inicio').value = umaSemanaAtras.toISOString().split('T')[0];
+            
+            console.log('✅ Sistema de relatórios inicializado com novo estilo');
+            console.log('🎯 Use os botões de teste para verificar o funcionamento dos gráficos');
+        });
+    </script>
+</body>
+</html>

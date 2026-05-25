@@ -1,0 +1,73 @@
+<!-- templates/perfil.html -->
+{% extends "base.html" %}
+
+{% block title %}Meu Perfil - EngLife{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-user-circle"></i> 
+                        Meu Perfil
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center mb-3">
+                            <i class="fas fa-user-circle fa-5x text-primary"></i>
+                            <h5 class="mt-2">{{ usuario_info.nome }}</h5>
+                            <span class="badge {% if usuario_info.tipo == 'admin' %}bg-danger{% else %}bg-info{% endif %}">
+                                {{ usuario_info.tipo|upper }}
+                            </span>
+                        </div>
+                        <div class="col-md-8">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="150">Nome completo:</th>
+                                    <td>{{ usuario_info.nome }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Email:</th>
+                                    <td>{{ usuario_info.email }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Tipo de usuário:</th>
+                                    <td>{{ usuario_info.tipo|title }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Status:</th>
+                                    <td>
+                                        {% if usuario_info.ativo %}
+                                            <span class="badge bg-success">Ativo</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Inativo</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Cadastrado em:</th>
+                                    <td>{{ usuario_info.created_at }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="text-center">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                            <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+                        </a>
+                        <a href="{{ url_for('logout') }}" class="btn btn-danger">
+                            <i class="fas fa-sign-out-alt"></i> Sair do Sistema
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

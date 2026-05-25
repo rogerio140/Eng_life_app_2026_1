@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastrar Equipamento - EngLife</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2E8B57;
+            --primary-dark: #1e6b4a;
+            --secondary-color: #34495e;
+            --accent-color: #27ae60;
+            --light-bg: #f8f9fa;
+            --sidebar-width: 280px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            height: 100vh;
+            position: fixed;
+            width: var(--sidebar-width);
+            transition: all 0.3s;
+            box-shadow: 3px 0 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar-brand {
+            padding: 2rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-brand .logo-icon {
+            font-size: 2rem;
+            margin-right: 0.5rem;
+        }
+
+        .sidebar-brand h2 {
+            font-weight: 700;
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            margin: 0.5rem 1rem;
+        }
+
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .nav-link i {
+            width: 20px;
+            margin-right: 0.75rem;
+        }
+
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .form-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            overflow: hidden;
+        }
+
+        .form-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            padding: 2rem;
+        }
+
+        .form-body {
+            padding: 2.5rem;
+        }
+
+        .form-control {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(46, 139, 87, 0.25);
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: var(--secondary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            border: none;
+            border-radius: 10px;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(46, 139, 87, 0.3);
+        }
+
+        .feature-card {
+            background: var(--light-bg);
+            border-radius: 15px;
+            padding: 1.5rem;
+            border-left: 4px solid var(--accent-color);
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateX(5px);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            .main-content {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+<!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-seedling logo-icon"></i>
+                <h2>EngLife</h2>
+            </div>
+            <small class="text-white-50">Sistema Inteligente</small>
+        </div>
+
+        <div class="sidebar-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('dashboard') }}" class="nav-link active">
+                    <i class="fas fa-tachometer-alt"></i>
+                    Dashboard
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('localizacoes') }}" class="nav-link">
+                    <i class="fas fa-map-marker-alt"></i>
+                    Localizações
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('equipamentos') }}" class="nav-link">
+                    <i class="fas fa-microchip"></i>
+                    Equipamentos
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('relatorios') }}" class="nav-link">
+                    <i class="fas fa-chart-line"></i>
+                    Relatórios
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-cog"></i>
+                    Configurações
+                </a>
+            </div>
+
+            <!-- Informações do Usuário -->
+            <div class="nav-item mt-4 p-3" style="border-top: 1px solid rgba(255,255,255,0.1);">
+                <div class="text-white">
+                    <small class="d-block">
+                        <i class="fas fa-user me-1"></i>
+                        {{ session.get('usuario_nome', 'Usuário') }}
+                    </small>
+                    <small class="text-white-50 d-block mt-1">
+                        {{ session.get('usuario_tipo', 'usuário')|title }}
+                    </small>
+                </div>
+            </div>
+
+            <div class="nav-item">
+                <a href="{{ url_for('logout') }}" class="nav-link text-warning">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Sair do Sistema
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="row justify-content-center">
+            <div class="col-xl-10">
+                <div class="form-card">
+                    <!-- Header -->
+                    <div class="form-header">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h1 class="display-6 fw-bold mb-2">
+                                    <i class="fas fa-plus-circle me-3"></i>
+                                    Cadastrar Novo Equipamento
+                                </h1>
+                                <p class="lead mb-0 opacity-90">
+                                    Adicione novos dataloggers ou alimentadores ao sistema inteligente
+                                </p>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <a href="{{ url_for('equipamentos') }}" class="btn btn-light">
+                                    <i class="fas fa-arrow-left me-2"></i>
+                                    Voltar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="form-body">
+                        <!-- Mensagens Flash -->
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{{ category }} alert-dismissible fade show mb-4" role="alert">
+                                        <i class="fas fa-{% if category == 'success' %}check-circle{% else %}exclamation-triangle{% endif %} me-2"></i>
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+
+                        <form action="{{ url_for('salvar_equipamento') }}" method="POST">
+                            <div class="row">
+                                <!-- Informações Básicas -->
+                                <div class="col-lg-8">
+                                    <h4 class="mb-4 text-gradient">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        Informações do Equipamento
+                                    </h4>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-4">
+                                            <label for="nome" class="form-label">
+                                                <i class="fas fa-tag me-2 text-primary"></i>Nome do Equipamento *
+                                            </label>
+                                            <input type="text" class="form-control" id="nome" name="nome" 
+                                                   placeholder="Ex: Datalogger Estufa A" required>
+                                        </div>
+
+                                        <div class="col-md-6 mb-4">
+                                            <label for="tipo" class="form-label">
+                                                <i class="fas fa-cog me-2 text-primary"></i>Tipo de Equipamento *
+                                            </label>
+                                            <select class="form-select" id="tipo" name="tipo" required>
+                                                <option value="">Selecione o tipo...</option>
+                                                <option value="datalogger">Datalogger</option>
+                                                <option value="alimentador">Alimentador</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-4">
+                                        <label for="descricao" class="form-label">
+                                            <i class="fas fa-align-left me-2 text-primary"></i>Descrição
+                                        </label>
+                                        <textarea class="form-control" id="descricao" name="descricao" 
+                                                  rows="3" placeholder="Descreva as características e função deste equipamento..."></textarea>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-4">
+                                            <label for="mac_address" class="form-label">
+                                                <i class="fas fa-network-wired me-2 text-primary"></i>MAC Address *
+                                            </label>
+                                            <input type="text" class="form-control" id="mac_address" name="mac_address" 
+                                                   placeholder="AA:BB:CC:DD:EE:FF" required 
+                                                   pattern="([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})">
+                                            <div class="form-text">Formato: 00:11:22:33:44:55</div>
+                                        </div>
+
+                                        <div class="col-md-6 mb-4">
+                                            <label for="ip_address" class="form-label">
+                                                <i class="fas fa-wifi me-2 text-primary"></i>IP Address
+                                            </label>
+                                            <input type="text" class="form-control" id="ip_address" name="ip_address" 
+                                                   placeholder="192.168.1.100">
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-4">
+                                            <label for="modelo" class="form-label">
+                                                <i class="fas fa-microchip me-2 text-primary"></i>Modelo
+                                            </label>
+                                            <input type="text" class="form-control" id="modelo" name="modelo" 
+                                                   placeholder="Ex: DS18B20, AutoFeed v1">
+                                        </div>
+
+                                        <div class="col-md-6 mb-4">
+                                            <label for="localizacao_id" class="form-label">
+                                                <i class="fas fa-map-marker-alt me-2 text-primary"></i>Localização
+                                            </label>
+                                            <div class="col-md-6 mb-4">
+                                            <label for="localizacao_id" class="form-label">
+                                                <i class="fas fa-map-marker-alt me-2 text-primary"></i>Localização *
+                                            </label>
+                                            <select class="form-select" id="localizacao_id" name="localizacao_id" required>
+                                                <option value="">Selecione uma localização...</option>
+                                                {% for loc in localizacoes %}
+                                                    <option value="{{ loc.id }}">
+                                                        {{ loc.nome }} 
+                                                        {% if loc.tipo %}
+                                                            ({{ loc.tipo }})
+                                                        {% endif %}
+                                                        {% if loc.descricao %}
+                                                            - {{ loc.descricao }}
+                                                        {% endif %}
+                                                    </option>
+                                                {% endfor %}
+                                            </select>
+                                            <div class="form-text">
+                                                Selecione a localização onde o equipamento será instalado.
+                                                {% if session['usuario_tipo'] == 'admin' %}
+                                                    <strong class="text-success">👑 Admin: Todas as localizações disponíveis</strong>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Informações Automáticas -->
+                                <div class="col-lg-4">
+                                    <h4 class="mb-4 text-gradient">
+                                        <i class="fas fa-robot me-2"></i>
+                                        Configuração Automática
+                                    </h4>
+
+                                    <div id="config-details">
+                                        <!-- Datalogger Card -->
+                                        <div class="feature-card mb-4" id="datalogger-card" style="display: none;">
+                                            <div class="feature-icon text-info">
+                                                <i class="fas fa-chart-line"></i>
+                                            </div>
+                                            <h5>Datalogger</h5>
+                                            <p class="text-muted mb-0">
+                                                <strong>Configuração Automática:</strong><br>
+                                                • 3 sensores de temperatura<br>
+                                                • Água, Estufa e Externa<br>
+                                                • Tipo: temperatura<br>
+                                                • Unidade: °C
+                                            </p>
+                                        </div>
+
+                                        <!-- Alimentador Card -->
+                                        <div class="feature-card mb-4" id="alimentador-card" style="display: none;">
+                                            <div class="feature-icon text-danger">
+                                                <i class="fas fa-utensils"></i>
+                                            </div>
+                                            <h5>Alimentador</h5>
+                                            <p class="text-muted mb-0">
+                                                <strong>Configuração Automática:</strong><br>
+                                                • Configuração padrão<br>
+                                                • Sistema de calibração<br>
+                                                • Parâmetros otimizados<br>
+                                                • Controle automatizado
+                                            </p>
+                                        </div>
+
+                                        <!-- Card de Instruções -->
+                                        <div class="feature-card bg-light">
+                                            <div class="feature-icon text-warning">
+                                                <i class="fas fa-lightbulb"></i>
+                                            </div>
+                                            <h5>Instruções</h5>
+                                            <p class="text-muted mb-0">
+                                                <strong>Selecione o tipo de equipamento</strong> para ver as configurações automáticas que serão aplicadas.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="row mt-4">
+                                <div class="col-12">
+                                    <div class="d-grid gap-2 d-md-flex justify-content-md-end border-top pt-4">
+                                        <a href="{{ url_for('equipamentos') }}" class="btn btn-outline-secondary me-md-2 px-4">
+                                            <i class="fas fa-times me-2"></i>
+                                            Cancelar
+                                        </a>
+                                        <button type="submit" class="btn btn-primary px-4">
+                                            <i class="fas fa-save me-2"></i>
+                                            Cadastrar Equipamento
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Atualizar informações baseadas no tipo selecionado
+        document.getElementById('tipo').addEventListener('change', function() {
+            const tipo = this.value;
+            const dataloggerCard = document.getElementById('datalogger-card');
+            const alimentadorCard = document.getElementById('alimentador-card');
+            
+            // Esconder todos os cards primeiro
+            dataloggerCard.style.display = 'none';
+            alimentadorCard.style.display = 'none';
+            
+            // Mostrar card baseado no tipo selecionado
+            if (tipo === 'datalogger') {
+                dataloggerCard.style.display = 'block';
+            } else if (tipo === 'alimentador') {
+                alimentadorCard.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Cronograma</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body { font-family: Arial; padding: 20px; background:#f5f5f5; }
+.card { background:white; padding:20px; border-radius:12px; box-shadow:0 4px 10px rgba(0,0,0,0.1); }
+h2 { margin-bottom:20px; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2>📊 Cronograma Interativo (Gantt Simplificado)</h2>
+  <canvas id="ganttChart"></canvas>
+</div>
+
+<script>
+const data = {
+  labels: [
+    'Viradouro - Testes',
+    'Viradouro - Aplicação',
+    'Viradouro - Processamento',
+    'Rio Pardo - Análise',
+    'Rio Pardo - Aplicação',
+    'Rio Pardo - Processamento'
+  ],
+  datasets: [{
+    label: 'Dias (Escala relativa)',
+    data: [
+      [0, 4],   // testes
+      [5, 15],  // aplicação
+      [16, 40], // processamento
+      [0, 4],   // análise
+      [7, 18],  // aplicação
+      [19, 50]  // processamento
+    ],
+    backgroundColor: 'rgba(54, 162, 235, 0.6)'
+  }]
+};
+
+const config = {
+  type: 'bar',
+  data: data,
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    plugins: {
+      legend: { display: false }
+    },
+    scales: {
+      x: {
+        title: { display: true, text: 'Linha do tempo (dias relativos)' }
+      }
+    }
+  }
+};
+
+new Chart(document.getElementById('ganttChart'), config);
+</script>
+
+</body>
+</html>

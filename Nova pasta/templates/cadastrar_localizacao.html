@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastrar Localização - EngLife</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2E8B57;
+            --primary-dark: #1e6b4a;
+            --secondary-color: #34495e;
+            --accent-color: #27ae60;
+            --light-bg: #f8f9fa;
+            --sidebar-width: 280px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            height: 100vh;
+            position: fixed;
+            width: var(--sidebar-width);
+            transition: all 0.3s;
+            box-shadow: 3px 0 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar-brand {
+            padding: 2rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-brand .logo-icon {
+            font-size: 2rem;
+            margin-right: 0.5rem;
+        }
+
+        .sidebar-brand h2 {
+            font-weight: 700;
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            margin: 0.5rem 1rem;
+        }
+
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .nav-link i {
+            width: 20px;
+            margin-right: 0.75rem;
+        }
+
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .form-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            overflow: hidden;
+        }
+
+        .form-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            padding: 2rem;
+        }
+
+        .form-body {
+            padding: 2.5rem;
+        }
+
+        .form-control {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(46, 139, 87, 0.25);
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: var(--secondary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            border: none;
+            border-radius: 10px;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(46, 139, 87, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            .main-content {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-seedling logo-icon"></i>
+                <h2>EngLife</h2>
+            </div>
+            <small class="text-white-50">Sistema Inteligente</small>
+        </div>
+
+        <div class="sidebar-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">
+                    <i class="fas fa-tachometer-alt"></i>
+                    Dashboard
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('localizacoes') }}" class="nav-link active">
+                    <i class="fas fa-map-marker-alt"></i>
+                    Localizações
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('equipamentos') }}" class="nav-link">
+                    <i class="fas fa-microchip"></i>
+                    Equipamentos
+                </a>
+            </div>
+            {% if session['usuario_tipo'] == 'admin' %}
+            <div class="nav-item">
+                <a href="{{ url_for('usuarios') }}" class="nav-link">
+                    <i class="fas fa-users"></i>
+                    Usuários
+                </a>
+            </div>
+            {% endif %}
+            <div class="nav-item">
+                <a href="{{ url_for('relatorios') }}" class="nav-link">
+                    <i class="fas fa-chart-line"></i>
+                    Relatórios
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-cog"></i>
+                    Configurações
+                </a>
+            </div>
+
+            <!-- Informações do Usuário -->
+            <div class="nav-item mt-4 p-3" style="border-top: 1px solid rgba(255,255,255,0.1);">
+                <div class="text-white">
+                    <small class="d-block">
+                        <i class="fas fa-user me-1"></i>
+                        {{ session.get('usuario_nome', 'Usuário') }}
+                    </small>
+                    <small class="text-white-50 d-block mt-1">
+                        {{ session.get('usuario_tipo', 'usuário')|title }}
+                    </small>
+                </div>
+            </div>
+
+            <div class="nav-item">
+                <a href="{{ url_for('logout') }}" class="nav-link text-warning">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Sair do Sistema
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="row justify-content-center">
+            <div class="col-xl-8">
+                <div class="form-card">
+                    <!-- Header -->
+                    <div class="form-header">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h1 class="display-6 fw-bold mb-2">
+                                    <i class="fas fa-map-marker-alt me-3"></i>
+                                    Cadastrar Nova Localização
+                                </h1>
+                                <p class="lead mb-0 opacity-90">
+                                    Adicione novas áreas de monitoramento ao sistema
+                                </p>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <a href="{{ url_for('localizacoes') }}" class="btn btn-light">
+                                    <i class="fas fa-arrow-left me-2"></i>
+                                    Voltar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="form-body">
+                        <!-- Mensagens Flash -->
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{{ category }} alert-dismissible fade show mb-4" role="alert">
+                                        <i class="fas fa-{% if category == 'success' %}check-circle{% else %}exclamation-triangle{% endif %} me-2"></i>
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+
+                        <form method="POST" action="{{ url_for('salvar_localizacao') }}">
+                            <div class="row">
+                                <div class="col-md-12 mb-4">
+                                    <label for="nome" class="form-label">
+                                        <i class="fas fa-tag me-2 text-primary"></i>Nome da Localização *
+                                    </label>
+                                    <input type="text" class="form-control" id="nome" name="nome" required 
+                                           placeholder="Ex: Estufa A, Setor 1, Área Externa">
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-12 mb-4">
+                                    <label for="descricao" class="form-label">
+                                        <i class="fas fa-align-left me-2 text-primary"></i>Descrição
+                                    </label>
+                                    <textarea class="form-control" id="descricao" name="descricao" rows="3" 
+                                              placeholder="Descreva as características desta localização..."></textarea>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-12 mb-4">
+                                    <label for="tipo" class="form-label">
+                                        <i class="fas fa-cog me-2 text-primary"></i>Tipo de Localização *
+                                    </label>
+                                    <select class="form-select" id="tipo" name="tipo" required>
+                                        <option value="">Selecione o tipo...</option>
+                                        <option value="estufa">Estufa</option>
+                                        <option value="setor">Setor</option>
+                                        <option value="area_externa">Área Externa</option>
+                                        <option value="laboratorio">Laboratório</option>
+                                        <option value="outro">Outro</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="row mt-4">
+                                <div class="col-12">
+                                    <div class="d-grid gap-2 d-md-flex justify-content-md-end border-top pt-4">
+                                        <a href="{{ url_for('localizacoes') }}" class="btn btn-outline-secondary me-md-2 px-4">
+                                            <i class="fas fa-times me-2"></i>
+                                            Cancelar
+                                        </a>
+                                        <button type="submit" class="btn btn-primary px-4">
+                                            <i class="fas fa-save me-2"></i>
+                                            Cadastrar Localização
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Localizações - EngLife</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2E8B57;
+            --primary-dark: #1e6b4a;
+            --secondary-color: #34495e;
+            --accent-color: #27ae60;
+            --light-bg: #f8f9fa;
+            --sidebar-width: 280px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fa;
+        }
+
+        .sidebar {
+            background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            height: 100vh;
+            position: fixed;
+            width: var(--sidebar-width);
+            transition: all 0.3s;
+            box-shadow: 3px 0 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar-brand {
+            padding: 2rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-brand .logo-icon {
+            font-size: 2rem;
+            margin-right: 0.5rem;
+        }
+
+        .sidebar-brand h2 {
+            font-weight: 700;
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            margin: 0.5rem 1rem;
+        }
+
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .nav-link i {
+            width: 20px;
+            margin-right: 0.75rem;
+        }
+
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .page-header {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border-left: 5px solid var(--accent-color);
+        }
+
+        .location-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border: none;
+            transition: all 0.3s ease;
+            height: 100%;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .location-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .location-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+        }
+
+        .stats-badge {
+            background: var(--light-bg);
+            border-radius: 10px;
+            padding: 0.5rem 1rem;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            border: none;
+            border-radius: 10px;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(46, 139, 87, 0.3);
+        }
+
+        .empty-state {
+            background: white;
+            border-radius: 15px;
+            padding: 4rem 2rem;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            color: #bdc3c7;
+            margin-bottom: 1.5rem;
+        }
+
+        .admin-badge {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .stats-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .type-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .type-estufa {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            color: white;
+        }
+
+        .type-setor {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .type-outro {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            .main-content {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+<!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-seedling logo-icon"></i>
+                <h2>EngLife</h2>
+            </div>
+            <small class="text-white-50">Sistema Inteligente</small>
+        </div>
+
+        <div class="sidebar-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('dashboard') }}" class="nav-link active">
+                    <i class="fas fa-tachometer-alt"></i>
+                    Dashboard
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('localizacoes') }}" class="nav-link">
+                    <i class="fas fa-map-marker-alt"></i>
+                    Localizações
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('equipamentos') }}" class="nav-link">
+                    <i class="fas fa-microchip"></i>
+                    Equipamentos
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('relatorios') }}" class="nav-link">
+                    <i class="fas fa-chart-line"></i>
+                    Relatórios
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <i class="fas fa-cog"></i>
+                    Configurações
+                </a>
+            </div>
+
+            <!-- Informações do Usuário -->
+            <div class="nav-item mt-4 p-3" style="border-top: 1px solid rgba(255,255,255,0.1);">
+                <div class="text-white">
+                    <small class="d-block">
+                        <i class="fas fa-user me-1"></i>
+                        {{ session.get('usuario_nome', 'Usuário') }}
+                    </small>
+                    <small class="text-white-50 d-block mt-1">
+                        {{ session.get('usuario_tipo', 'usuário')|title }}
+                    </small>
+                </div>
+            </div>
+
+            <div class="nav-item">
+                <a href="{{ url_for('logout') }}" class="nav-link text-warning">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Sair do Sistema
+                </a>
+            </div>
+        </div>
+    </div>
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="display-6 fw-bold">
+                        <i class="fas fa-map-marker-alt me-3 text-primary"></i>
+                        Gerenciar Localizações
+                    </h1>
+                    <p class="lead text-muted mb-0">
+                        Organize estufas, setores e áreas do sistema
+                        {% if session['usuario_tipo'] == 'admin' %}
+                            <span class="admin-badge ms-2">
+                                <i class="fas fa-crown me-1"></i>
+                                Modo Administrador
+                            </span>
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="{{ url_for('cadastrar_localizacao') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-plus me-2"></i>
+                        Nova Localização
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mensagens Flash -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show mb-4" role="alert">
+                        <i class="fas fa-{% if category == 'success' %}check-circle{% else %}exclamation-triangle{% endif %} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Estatísticas -->
+        {% if localizacoes %}
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="stats-card">
+                    <div class="stats-number text-primary">{{ localizacoes|length }}</div>
+                    <div class="text-muted">Total de Localizações</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card">
+                    <div class="stats-number text-success">
+                        {{ localizacoes|selectattr('tipo', 'equalto', 'estufa')|list|length }}
+                    </div>
+                    <div class="text-muted">Estufas</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card">
+                    <div class="stats-number text-info">
+                        {{ localizacoes|selectattr('tipo', 'equalto', 'setor')|list|length }}
+                    </div>
+                    <div class="text-muted">Setores</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stats-card">
+                    <div class="stats-number text-warning">
+                        {{ localizacoes|selectattr('tipo', 'equalto', 'outro')|list|length }}
+                    </div>
+                    <div class="text-muted">Outras</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Grid de Localizações -->
+        {% if localizacoes %}
+        <div class="row">
+            {% for localizacao in localizacoes %}
+            <div class="col-xl-4 col-lg-6 col-md-6 mb-4">
+                <div class="location-card">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div class="location-icon">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </div>
+                        <div class="text-end">
+                            <span class="type-badge type-{{ localizacao.tipo }}">
+                                {{ localizacao.tipo|title }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <h5 class="fw-bold mb-2">{{ localizacao.nome }}</h5>
+                    
+                    {% if localizacao.descricao %}
+                    <p class="text-muted mb-3">{{ localizacao.descricao }}</p>
+                    {% endif %}
+
+                    <div class="location-stats mb-3">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="stats-badge text-primary">
+                                    <i class="fas fa-microchip me-1"></i>
+                                    {{ localizacao.total_equipamentos }} Equip.
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="stats-badge text-success">
+                                    <i class="fas fa-users me-1"></i>
+                                    {{ localizacao.total_usuarios }} Users
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="location-date mb-3">
+                        <small class="text-muted">
+                            <i class="fas fa-calendar me-1"></i>
+                            {% if localizacao.created_at %}
+                                Criada em {{ localizacao.created_at.strftime('%d/%m/%Y') }}
+                            {% else %}
+                                Data de criação não disponível
+                            {% endif %}
+                        </small>
+                    </div>
+
+                    <div class="d-grid">
+                        <a href="{{ url_for('ver_localizacao', localizacao_id=localizacao.id) }}" 
+                           class="btn btn-outline-primary">
+                            <i class="fas fa-eye me-2"></i>
+                            Ver Detalhes
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <!-- Estado Vazio -->
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="fas fa-map-marker-alt"></i>
+            </div>
+            <h3 class="text-muted mb-3">Nenhuma Localização Cadastrada</h3>
+            <p class="text-muted mb-4">
+                {% if session['usuario_tipo'] == 'admin' %}
+                    Comece cadastrando localizações para organizar seu sistema.
+                {% else %}
+                    Você ainda não tem localizações cadastradas.
+                {% endif %}
+            </p>
+            <a href="{{ url_for('cadastrar_localizacao') }}" class="btn btn-primary btn-lg">
+                <i class="fas fa-plus me-2"></i>
+                Cadastrar Primeira Localização
+            </a>
+        </div>
+        {% endif %}
+
+        <!-- Informações de Permissão -->
+        {% if localizacoes and session['usuario_tipo'] == 'admin' %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="alert alert-info border-0">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-info-circle fa-2x me-3"></i>
+                        <div>
+                            <h6 class="alert-heading mb-1">Modo Administrador Ativo</h6>
+                            <p class="mb-0">
+                                Você está visualizando todas as localizações do sistema. 
+                                Como administrador, pode gerenciar todas as áreas.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
