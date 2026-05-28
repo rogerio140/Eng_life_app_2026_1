@@ -380,58 +380,64 @@
         </div>
 
         <div class="sidebar-nav">
-            <div class="nav-item">
-                <a href="{{ url_for('dashboard') }}" class="nav-link">
-                    <i class="fas fa-tachometer-alt"></i>
-                    Dashboard
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="{{ url_for('localizacoes') }}" class="nav-link">
-                    <i class="fas fa-map-marker-alt"></i>
-                    Localizações
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="{{ url_for('equipamentos') }}" class="nav-link">
-                    <i class="fas fa-microchip"></i>
-                    Equipamentos
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="{{ url_for('relatorios') }}" class="nav-link active">
-                    <i class="fas fa-chart-line"></i>
-                    Relatórios
-                </a>
-            </div>
-            
-            <div class="nav-item">
-                <a href="#" class="nav-link">
-                    <i class="fas fa-cog"></i>
-                    Configurações
-                </a>
-            </div>
+        <div class="nav-item">
+            <a href="{{ url_for('dashboard') }}" class="nav-link">
+                <i class="fas fa-tachometer-alt"></i>
+                Dashboard
+            </a>
+        </div>
+        <div class="nav-item">
+            <a href="{{ url_for('localizacoes') }}" class="nav-link">
+                <i class="fas fa-map-marker-alt"></i>
+                Localizações
+            </a>
+        </div>
+        <div class="nav-item">
+            <a href="{{ url_for('equipamentos') }}" class="nav-link">
+                <i class="fas fa-microchip"></i>
+                Equipamentos
+            </a>
+        </div>
+        <div class="nav-item">
+            <a href="{{ url_for('relatorios') }}" class="nav-link">
+                <i class="fas fa-chart-line"></i>
+                Relatórios
+            </a>
+        </div>
+        <div class="nav-item">
+            <a href="{{ url_for('configuracoes') }}" class="nav-link">
+                <i class="fas fa-cog"></i>
+                Configurações
+            </a>
+        </div>
 
-            <!-- Informações do Usuário -->
-            <div class="nav-item mt-4 p-3" style="border-top: 1px solid rgba(255,255,255,0.1);">
-                <div class="text-white">
-                    <small class="d-block">
-                        <i class="fas fa-user me-1"></i>
-                        {{ session.get('usuario_nome', 'Usuário') }}
-                    </small>
-                    <small class="text-white-50 d-block mt-1">
-                        {{ session.get('usuario_tipo', 'usuário')|title }}
-                    </small>
-                </div>
-            </div>
-
-            <div class="nav-item">
-                <a href="{{ url_for('logout') }}" class="nav-link text-warning">
-                    <i class="fas fa-sign-out-alt"></i>
-                    Sair do Sistema
-                </a>
+        <!-- Informações do Usuário -->
+        <div class="nav-item mt-4 p-3" style="border-top: 1px solid rgba(255,255,255,0.1);">
+            <div class="text-white">
+                <small class="d-block">
+                    <i class="fas fa-user me-1"></i>
+                    {{ session.get('usuario_nome', 'Usuário') }}
+                </small>
+                <small class="text-white-50 d-block mt-1">
+                    {{ session.get('usuario_tipo', 'usuário')|title }}
+                </small>
             </div>
         </div>
+
+        <div class="nav-item">
+            <a href="{{ url_for('logout') }}" class="nav-link text-warning">
+                <i class="fas fa-sign-out-alt"></i>
+                Sair do Sistema
+            </a>
+        </div>
+    </div>
+
+
+
+
+
+
+
     </div>
 
     <!-- Main Content -->

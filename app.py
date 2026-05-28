@@ -857,45 +857,68 @@ def localizacoes():
             if session['usuario_tipo'] == 'admin':
                 # Admin vê todas as localizações
                 cursor.execute("""
-                    SELECT l.*, 
-                           COUNT(DISTINCT d.id) as total_equipamentos,
-                           COUNT(DISTINCT u.id) as total_usuarios
+                    SELECT 
+                        l.id, 
+                        l.nome, 
+                        l.descricao, 
+                        l.tipo, 
+                        l.created_at,
+                        COUNT(DISTINCT d.id) as total_equipamentos,
+                        COUNT(DISTINCT u.id) as total_usuarios
                     FROM localizacoes l
                     LEFT JOIN dispositivos d ON l.id = d.localizacao_id
                     LEFT JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
                     LEFT JOIN usuarios u ON ul.usuario_id = u.id
-                    GROUP BY l.id
+                    GROUP BY l.id, l.nome, l.descricao, l.tipo, l.created_at
                     ORDER BY l.nome
                 """)
             else:
                 # Usuário normal vê apenas suas localizações
                 cursor.execute("""
-                    SELECT l.*, 
-                           COUNT(DISTINCT d.id) as total_equipamentos,
-                           COUNT(DISTINCT u.id) as total_usuarios
+                    SELECT 
+                        l.id, 
+                        l.nome, 
+                        l.descricao, 
+                        l.tipo, 
+                        l.created_at,
+                        COUNT(DISTINCT d.id) as total_equipamentos,
+                        COUNT(DISTINCT u.id) as total_usuarios
                     FROM localizacoes l
                     JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
                     LEFT JOIN dispositivos d ON l.id = d.localizacao_id
                     LEFT JOIN usuario_localizacao ul2 ON l.id = ul2.localizacao_id
                     LEFT JOIN usuarios u ON ul2.usuario_id = u.id
                     WHERE ul.usuario_id = %s
-                    GROUP BY l.id
+                    GROUP BY l.id, l.nome, l.descricao, l.tipo, l.created_at
                     ORDER BY l.nome
                 """, (session['usuario_id'],))
             
-            localizacoes = cursor.fetchall()
+            localizacoes_raw = cursor.fetchall()
             
-            # Converter para lista de dicionários
-            colunas = ['id', 'nome', 'descricao', 'tipo', 'created_at', 'total_equipamentos', 'total_usuarios']
-            localizacoes_dict = [dict(zip(colunas, localizacao)) for localizacao in localizacoes]
+            # Converter para lista de dicionários com as colunas na ordem correta
+            localizacoes_dict = []
+            for row in localizacoes_raw:
+                localizacao = {
+                    'id': row[0],
+                    'nome': row[1],
+                    'descricao': row[2],
+                    'tipo': row[3],
+                    'created_at': row[4],
+                    'total_equipamentos': row[5] if row[5] is not None else 0,  # Garantir que é número
+                    'total_usuarios': row[6] if row[6] is not None else 0        # Garantir que é número
+                }
+                localizacoes_dict.append(localizacao)
             
     except Exception as e:
         print(f"❌ Erro ao buscar localizações: {e}")
+        import traceback
+        traceback.print_exc()
         localizacoes_dict = []
     finally:
         conn.close()
     
     return render_template('localizacoes.html', localizacoes=localizacoes_dict)
+
 
 @app.route('/localizacoes/cadastrar')
 def cadastrar_localizacao():
@@ -4240,6 +4263,177 @@ def criar_localizacao(cursor, localizacao_info):
     
     return cursor.fetchone()['id']
 
+# ====================
+# ROTAS DE LOCALIZAÇÕES - COM EDIÇÃO E EXCLUSÃO
+# ====================
+
+@app.route('/localizacoes/<int:localizacao_id>/editar')
+@login_required
+def editar_localizacao(localizacao_id):
+    """Formulário para editar localização"""
+    if 'usuario_id' not in session:
+        flash('Por favor, faça login para acessar esta página.', 'warning')
+        return redirect(url_for('login'))
+    
+    # Verificar permissão (apenas admin)
+    if session['usuario_tipo'] != 'admin':
+        flash('Acesso negado. Apenas administradores podem editar localizações.', 'danger')
+        return redirect(url_for('localizacoes'))
+    
+    conn = db.get_connection()
+    if not conn:
+        flash('Erro de conexão com o banco de dados', 'danger')
+        return redirect(url_for('localizacoes'))
+    
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, nome, descricao, tipo
+                FROM localizacoes
+                WHERE id = %s
+            """, (localizacao_id,))
+            
+            localizacao = cursor.fetchone()
+            
+            if not localizacao:
+                flash('Localização não encontrada.', 'danger')
+                return redirect(url_for('localizacoes'))
+            
+            localizacao_dict = {
+                'id': localizacao[0],
+                'nome': localizacao[1],
+                'descricao': localizacao[2],
+                'tipo': localizacao[3]
+            }
+            
+    except Exception as e:
+        print(f"❌ Erro ao buscar localização: {e}")
+        flash('Erro ao carregar localização.', 'danger')
+        return redirect(url_for('localizacoes'))
+    finally:
+        conn.close()
+    
+    return render_template('editar_localizacao.html', localizacao=localizacao_dict)
+
+
+@app.route('/localizacoes/<int:localizacao_id>/atualizar', methods=['POST'])
+@login_required
+def atualizar_localizacao(localizacao_id):
+    """Atualiza uma localização existente"""
+    if 'usuario_id' not in session:
+        flash('Por favor, faça login para acessar esta página.', 'warning')
+        return redirect(url_for('login'))
+    
+    # Verificar permissão (apenas admin)
+    if session['usuario_tipo'] != 'admin':
+        flash('Acesso negado. Apenas administradores podem editar localizações.', 'danger')
+        return redirect(url_for('localizacoes'))
+    
+    try:
+        nome = request.form.get('nome')
+        descricao = request.form.get('descricao', '')
+        tipo = request.form.get('tipo')
+        
+        if not nome or not tipo:
+            flash('Nome e tipo são obrigatórios.', 'danger')
+            return redirect(url_for('editar_localizacao', localizacao_id=localizacao_id))
+        
+        conn = db.get_connection()
+        if not conn:
+            flash('Erro de conexão com o banco de dados', 'danger')
+            return redirect(url_for('editar_localizacao', localizacao_id=localizacao_id))
+        
+        with conn.cursor() as cursor:
+            # Verificar se o nome já existe em outra localização
+            cursor.execute("""
+                SELECT id FROM localizacoes 
+                WHERE nome = %s AND id != %s
+            """, (nome, localizacao_id))
+            
+            if cursor.fetchone():
+                flash('Já existe outra localização com este nome.', 'danger')
+                return redirect(url_for('editar_localizacao', localizacao_id=localizacao_id))
+            
+            # Atualizar localização
+            cursor.execute("""
+                UPDATE localizacoes 
+                SET nome = %s, descricao = %s, tipo = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """, (nome, descricao, tipo, localizacao_id))
+            
+            conn.commit()
+            flash('Localização atualizada com sucesso!', 'success')
+            
+    except Exception as e:
+        print(f"❌ Erro ao atualizar localização: {e}")
+        flash(f'Erro ao atualizar localização: {str(e)}', 'danger')
+        return redirect(url_for('editar_localizacao', localizacao_id=localizacao_id))
+    finally:
+        if conn:
+            conn.close()
+    
+    return redirect(url_for('localizacoes'))
+
+
+@app.route('/localizacoes/<int:localizacao_id>/excluir', methods=['POST'])
+@login_required
+def excluir_localizacao(localizacao_id):
+    """Exclui uma localização"""
+    if 'usuario_id' not in session:
+        flash('Por favor, faça login para acessar esta página.', 'warning')
+        return redirect(url_for('login'))
+    
+    # Verificar permissão (apenas admin)
+    if session['usuario_tipo'] != 'admin':
+        flash('Acesso negado. Apenas administradores podem excluir localizações.', 'danger')
+        return redirect(url_for('localizacoes'))
+    
+    conn = db.get_connection()
+    if not conn:
+        flash('Erro de conexão com o banco de dados', 'danger')
+        return redirect(url_for('localizacoes'))
+    
+    try:
+        with conn.cursor() as cursor:
+            # Buscar informações da localização
+            cursor.execute("""
+                SELECT nome, 
+                       (SELECT COUNT(*) FROM dispositivos WHERE localizacao_id = %s) as total_equipamentos
+                FROM localizacoes
+                WHERE id = %s
+            """, (localizacao_id, localizacao_id))
+            
+            localizacao = cursor.fetchone()
+            
+            if not localizacao:
+                flash('Localização não encontrada.', 'danger')
+                return redirect(url_for('localizacoes'))
+            
+            nome_localizacao, total_equipamentos = localizacao
+            
+            # Verificar se há equipamentos associados
+            if total_equipamentos > 0:
+                flash(f'Não é possível excluir a localização "{nome_localizacao}" pois ela possui {total_equipamentos} equipamento(s) associado(s).', 'danger')
+                return redirect(url_for('localizacoes'))
+            
+            # Excluir localização
+            cursor.execute("DELETE FROM localizacoes WHERE id = %s", (localizacao_id,))
+            
+            conn.commit()
+            flash(f'Localização "{nome_localizacao}" excluída com sucesso!', 'success')
+            
+    except Exception as e:
+        print(f"❌ Erro ao excluir localização: {e}")
+        conn.rollback()
+        flash(f'Erro ao excluir localização: {str(e)}', 'danger')
+    finally:
+        if conn:
+            conn.close()
+    
+    return redirect(url_for('localizacoes'))
+
+
+
 def criar_limites_temperatura(cursor, localizacao_id):
     """Cria limites padrão de temperatura"""
     limites_padrao = [
@@ -4868,23 +5062,19 @@ def obter_comandos_pendentes():
         
         try:
             with conn.cursor() as cursor:
-                # Primeiro, verificar se a tabela existe
+                # Criar tabela se não existir
                 cursor.execute("""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables 
-                        WHERE table_name = 'comandos_pendentes'
+                    CREATE TABLE IF NOT EXISTS comandos_pendentes (
+                        id SERIAL PRIMARY KEY,
+                        mac_address VARCHAR(17) NOT NULL,
+                        comando VARCHAR(50) NOT NULL,
+                        parametros TEXT,
+                        executado BOOLEAN DEFAULT FALSE,
+                        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        executado_em TIMESTAMP,
+                        criado_por INTEGER
                     )
                 """)
-                tabela_existe = cursor.fetchone()[0]
-                
-                if not tabela_existe:
-                    print("⚠️ Tabela comandos_pendentes não existe")
-                    return jsonify({
-                        'status': 'sucesso',
-                        'comandos': [],
-                        'quantidade': 0,
-                        'mensagem': 'Tabela de comandos não disponível'
-                    }), 200
                 
                 # Buscar comandos pendentes
                 cursor.execute("""
@@ -4897,20 +5087,10 @@ def obter_comandos_pendentes():
                 
                 comandos_raw = cursor.fetchall()
                 
-                # Marcar como executados
-                for cmd in comandos_raw:
-                    cursor.execute("""
-                        UPDATE comandos_pendentes 
-                        SET executado = true, executado_em = NOW()
-                        WHERE id = %s
-                    """, (cmd[0],))
-                
-                conn.commit()
-                
-                # Formatar resposta
+                # Formatar resposta como ARRAY (como o ESP32 espera)
                 comandos_lista = []
                 for cmd in comandos_raw:
-                    # Parse dos parâmetros JSON
+                    # Parse dos parâmetros
                     parametros = {}
                     if cmd[2]:
                         try:
@@ -4923,17 +5103,24 @@ def obter_comandos_pendentes():
                             parametros = {}
                     
                     comandos_lista.append({
-                        'id': cmd[0],
                         'comando': cmd[1],
-                        'parametros': parametros,
-                        'criado_em': cmd[3].isoformat() if cmd[3] else None
+                        'parametros': parametros
                     })
+                    
+                    # Marcar como executado APÓS formatar a resposta
+                    cursor.execute("""
+                        UPDATE comandos_pendentes 
+                        SET executado = true, executado_em = NOW()
+                        WHERE id = %s
+                    """, (cmd[0],))
+                
+                conn.commit()
                 
                 print(f"✅ {len(comandos_lista)} comando(s) encontrado(s)")
                 
+                # Retornar no formato que o ESP32 espera: objeto com array "comandos"
                 return jsonify({
-                    'status': 'sucesso',
-                    'comandos': comandos_lista,
+                    'comandos': comandos_lista,  # ← Array, como o ESP32 espera
                     'quantidade': len(comandos_lista),
                     'timestamp': datetime.now().isoformat()
                 }), 200
@@ -4951,6 +5138,182 @@ def obter_comandos_pendentes():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+
+
+# Adicione esta função no seu app.py (antes do if __name__)
+def criar_tabelas_se_necessario():
+    """Cria todas as tabelas necessárias se não existirem"""
+    conn = db.get_connection()
+    if not conn:
+        print("❌ Erro de conexão ao criar tabelas")
+        return
+    
+    try:
+        with conn.cursor() as cursor:
+            # Tabela comandos_pendentes
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS comandos_pendentes (
+                    id SERIAL PRIMARY KEY,
+                    mac_address VARCHAR(17) NOT NULL,
+                    comando VARCHAR(50) NOT NULL,
+                    parametros JSONB DEFAULT '{}',
+                    executado BOOLEAN DEFAULT FALSE,
+                    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    executado_em TIMESTAMP,
+                    criado_por INTEGER
+                )
+            """)
+            
+            # Índices
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_comandos_pendentes_mac ON comandos_pendentes(mac_address)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_comandos_pendentes_executado ON comandos_pendentes(executado)")
+            
+            # Tabela historico_status
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS historico_status (
+                    id SERIAL PRIMARY KEY,
+                    dispositivo_id INTEGER NOT NULL,
+                    nivel_racao DECIMAL(10,2),
+                    motor_ligado BOOLEAN DEFAULT FALSE,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_status_dispositivo ON historico_status(dispositivo_id)")
+            
+            # Tabela logs_sistema
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS logs_sistema (
+                    id SERIAL PRIMARY KEY,
+                    acao VARCHAR(100) NOT NULL,
+                    descricao TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            conn.commit()
+            print("✅ Tabelas verificadas/criadas com sucesso!")
+            
+    except Exception as e:
+        print(f"❌ Erro ao criar tabelas: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
+
+# ============================================
+# SISTEMA DE HEARTBEAT E DETECÇÃO DE OFFLINE
+# ============================================
+
+# Função para ser chamada periodicamente (usando APScheduler)
+from apscheduler.schedulers.background import BackgroundScheduler
+
+def verificar_equipamentos_offline_auto():
+    """Versão automática que verifica equipamentos offline"""
+    try:
+        timeout_minutos = 2  # 2 minutos sem heartbeat = offline
+        
+        conn = db.get_connection()
+        if not conn:
+            return
+        
+        try:
+            with conn.cursor() as cursor:
+                # Buscar equipamentos que deveriam estar online mas não respondem
+                cursor.execute("""
+                    UPDATE dispositivos 
+                    SET online = false
+                    WHERE online = true 
+                      AND ultima_comunicacao < NOW() - INTERVAL '%s minutes'
+                    RETURNING id, mac_address, nome, tipo
+                """, (timeout_minutos,))
+                
+                equipamentos_offline = cursor.fetchall()
+                
+                if equipamentos_offline:
+                    print(f"🔴 {len(equipamentos_offline)} equipamento(s) ficaram offline:")
+                    for eq in equipamentos_offline:
+                        print(f"   - {eq[2]} ({eq[3]}) - MAC: {eq[1]}")
+                    
+                    conn.commit()
+                
+        except Exception as e:
+            print(f"❌ Erro no verificador automático: {e}")
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"❌ Erro geral no verificador: {e}")
+
+def iniciar_verificador_offline():
+    """Inicia o scheduler para verificar equipamentos offline"""
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(func=verificar_equipamentos_offline_auto, trigger="interval", seconds=60)
+        scheduler.start()
+        print("✅ Verificador de equipamentos offline iniciado (a cada 60 segundos)")
+    except ImportError:
+        print("⚠️ APScheduler não instalado. Instale com: pip install apscheduler")
+    except Exception as e:
+        print(f"⚠️ Erro ao iniciar verificador: {e}")
+
+# Adicione esta função para criar as tabelas
+def criar_tabelas_se_necessario():
+    """Cria todas as tabelas necessárias se não existirem"""
+    conn = db.get_connection()
+    if not conn:
+        print("❌ Erro de conexão ao criar tabelas")
+        return
+    
+    try:
+        with conn.cursor() as cursor:
+            # Tabela comandos_pendentes
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS comandos_pendentes (
+                    id SERIAL PRIMARY KEY,
+                    mac_address VARCHAR(17) NOT NULL,
+                    comando VARCHAR(50) NOT NULL,
+                    parametros JSONB DEFAULT '{}',
+                    executado BOOLEAN DEFAULT FALSE,
+                    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    executado_em TIMESTAMP,
+                    criado_por INTEGER
+                )
+            """)
+            
+            # Índices
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_comandos_pendentes_mac ON comandos_pendentes(mac_address)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_comandos_pendentes_executado ON comandos_pendentes(executado)")
+            
+            # Tabela historico_status
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS historico_status (
+                    id SERIAL PRIMARY KEY,
+                    dispositivo_id INTEGER NOT NULL,
+                    nivel_racao DECIMAL(10,2),
+                    motor_ligado BOOLEAN DEFAULT FALSE,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_status_dispositivo ON historico_status(dispositivo_id)")
+            
+            # Tabela logs_sistema
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS logs_sistema (
+                    id SERIAL PRIMARY KEY,
+                    acao VARCHAR(100) NOT NULL,
+                    descricao TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            conn.commit()
+            print("✅ Tabelas verificadas/criadas com sucesso!")
+            
+    except Exception as e:
+        print(f"❌ Erro ao criar tabelas: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
 
 @app.route('/api/equipamento/historico', methods=['GET'])
 def obter_historico_alimentador():
@@ -5485,14 +5848,7 @@ def configuracoes():
         
         with conn.cursor() as cursor:
             # ============================================
-            # DEBUG: Verificar quantos dataloggers existem
-            # ============================================
-            cursor.execute("SELECT COUNT(*) FROM dispositivos WHERE tipo = 'datalogger'")
-            count_dataloggers = cursor.fetchone()[0]
-            print(f"🔍 Total de dataloggers na tabela dispositivos: {count_dataloggers}")
-            
-            # ============================================
-            # 1. BUSCAR ALIMENTADORES
+            # 1. BUSCAR ALIMENTADORES - QUERY CORRIGIDA
             # ============================================
             if session['usuario_tipo'] == 'admin':
                 cursor.execute("""
@@ -5500,7 +5856,12 @@ def configuracoes():
                         d.id, d.nome, d.mac_address, d.online, d.ultima_comunicacao,
                         l.nome as localizacao_nome,
                         a.capacidade_racao, a.nivel_racao_atual,
-                        ca.ativa, ca.porcoes_por_dia
+                        COALESCE(ca.ativa, false) as ativa,
+                        COALESCE(ca.intervalo_alimentacao, 3600) as intervalo_alimentacao,
+                        COALESCE(ca.quantidade_por_alimentacao, 15.0) as quantidade_por_alimentacao,
+                        COALESCE(ca.dias_semana, '1,2,3,4,5,6,7') as dias_semana,
+                        COALESCE(ca.horario_inicio, '08:00:00') as horario_inicio,
+                        COALESCE(ca.horario_fim, '18:00:00') as horario_fim
                     FROM dispositivos d
                     JOIN alimentadores a ON d.id = a.dispositivo_id
                     LEFT JOIN localizacoes l ON d.localizacao_id = l.id
@@ -5514,7 +5875,12 @@ def configuracoes():
                         d.id, d.nome, d.mac_address, d.online, d.ultima_comunicacao,
                         l.nome as localizacao_nome,
                         a.capacidade_racao, a.nivel_racao_atual,
-                        ca.ativa, ca.porcoes_por_dia
+                        COALESCE(ca.ativa, false) as ativa,
+                        COALESCE(ca.intervalo_alimentacao, 3600) as intervalo_alimentacao,
+                        COALESCE(ca.quantidade_por_alimentacao, 15.0) as quantidade_por_alimentacao,
+                        COALESCE(ca.dias_semana, '1,2,3,4,5,6,7') as dias_semana,
+                        COALESCE(ca.horario_inicio, '08:00:00') as horario_inicio,
+                        COALESCE(ca.horario_fim, '18:00:00') as horario_fim
                     FROM dispositivos d
                     JOIN alimentadores a ON d.id = a.dispositivo_id
                     LEFT JOIN localizacoes l ON d.localizacao_id = l.id
@@ -5526,26 +5892,55 @@ def configuracoes():
             
             alimentadores_raw = cursor.fetchall()
             
-            # Converter para lista de dicionários
+            # Converter para lista de dicionários com valores padrão
             alimentadores = []
-            colunas_alimentadores = ['id', 'nome', 'mac_address', 'online', 'ultima_comunicacao',
-                                     'localizacao_nome', 'capacidade_racao', 'nivel_racao_atual',
-                                     'ativa', 'porcoes_por_dia']
-            
             for row in alimentadores_raw:
-                alm = dict(zip(colunas_alimentadores, row))
-                if alm['capacidade_racao']:
-                    alm['capacidade_racao'] = float(alm['capacidade_racao'])
-                if alm['nivel_racao_atual']:
-                    alm['nivel_racao_atual'] = float(alm['nivel_racao_atual'])
+                alm = {
+                    'id': row[0],
+                    'nome': row[1],
+                    'mac_address': row[2],
+                    'online': row[3],
+                    'ultima_comunicacao': row[4],
+                    'localizacao_nome': row[5],
+                    'capacidade_racao': float(row[6]) if row[6] else 0,
+                    'nivel_racao_atual': float(row[7]) if row[7] else 0,
+                    'ativa': row[8] if row[8] is not None else False,
+                    'intervalo_alimentacao': row[9] if row[9] else 3600,
+                    'quantidade_por_alimentacao': float(row[10]) if row[10] else 15.0,
+                    'dias_semana': row[11] if row[11] else '1,2,3,4,5,6,7',
+                    'horario_inicio': str(row[12])[:5] if row[12] else '08:00',
+                    'horario_fim': str(row[13])[:5] if row[13] else '18:00'
+                }
+                
+                # Calcular porcoes_por_dia baseado no intervalo
+                if alm['intervalo_alimentacao'] and alm['horario_inicio'] and alm['horario_fim']:
+                    try:
+                        from datetime import datetime
+                        inicio = datetime.strptime(alm['horario_inicio'], '%H:%M')
+                        fim = datetime.strptime(alm['horario_fim'], '%H:%M')
+                        minutos_total = (fim - inicio).seconds // 60
+                        if minutos_total < 0:
+                            minutos_total += 24 * 60
+                        intervalo_minutos = alm['intervalo_alimentacao'] // 60
+                        if intervalo_minutos > 0:
+                            alm['porcoes_por_dia'] = (minutos_total // intervalo_minutos) + 1
+                        else:
+                            alm['porcoes_por_dia'] = 10
+                    except:
+                        alm['porcoes_por_dia'] = 10
+                else:
+                    alm['porcoes_por_dia'] = 10
+                
+                # Calcular quantidade_total_diaria
+                alm['quantidade_total_diaria'] = alm['quantidade_por_alimentacao'] * alm['porcoes_por_dia']
+                
                 alimentadores.append(alm)
             
             print(f"✅ Alimentadores encontrados: {len(alimentadores)}")
             
             # ============================================
-            # 2. BUSCAR DATALOGGERS - VERSÃO CORRIGIDA
+            # 2. BUSCAR DATALOGGERS
             # ============================================
-            # Primeiro, buscar todos os dispositivos do tipo datalogger
             if session['usuario_tipo'] == 'admin':
                 cursor.execute("""
                     SELECT 
@@ -5575,20 +5970,29 @@ def configuracoes():
                 """, (session['usuario_id'],))
             
             dataloggers_raw = cursor.fetchall()
-            print(f"🔍 Dataloggers raw encontrados: {len(dataloggers_raw)}")
             
             # Converter para lista de dicionários
-            colunas_dataloggers = ['id', 'nome', 'mac_address', 'online', 'ultima_comunicacao',
-                                   'descricao', 'modelo', 'localizacao_id', 'localizacao_nome',
-                                   'intervalo_leitura', 'quantidade_sensores']
-            
             dataloggers = []
             for row in dataloggers_raw:
-                dg = dict(zip(colunas_dataloggers, row))
-                print(f"  - Processando datalogger: {dg.get('nome')} (ID: {dg.get('id')})")
+                dg = {
+                    'id': row[0],
+                    'nome': row[1],
+                    'mac_address': row[2],
+                    'online': row[3],
+                    'ultima_comunicacao': row[4],
+                    'descricao': row[5],
+                    'modelo': row[6],
+                    'localizacao_id': row[7],
+                    'localizacao_nome': row[8],
+                    'intervalo_leitura': row[9] if row[9] else 60,
+                    'quantidade_sensores': row[10] if row[10] else 0,
+                    'sensores': [],
+                    'total_leituras': 0,
+                    'ultima_leitura': None
+                }
                 
                 # Buscar últimos valores dos sensores
-                if dg.get('id'):
+                if dg['id']:
                     cursor.execute("""
                         SELECT s.posicao, ls.valor, ls.timestamp
                         FROM leituras_sensores ls
@@ -5601,7 +6005,6 @@ def configuracoes():
                     
                     sensores_raw = cursor.fetchall()
                     sensores = []
-                    dg['ultima_leitura'] = None
                     
                     for s in sensores_raw:
                         sensores.append({
@@ -5627,13 +6030,10 @@ def configuracoes():
                     
                     total_row = cursor.fetchone()
                     dg['total_leituras'] = total_row[0] if total_row else 0
-                else:
-                    dg['sensores'] = []
-                    dg['total_leituras'] = 0
                 
                 dataloggers.append(dg)
             
-            print(f"✅ Dataloggers processados: {len(dataloggers)}")
+            print(f"✅ Dataloggers encontrados: {len(dataloggers)}")
         
         conn.close()
         
@@ -5648,6 +6048,7 @@ def configuracoes():
         traceback.print_exc()
         flash(f'Erro ao carregar configurações: {str(e)}', 'danger')
         return render_template('configuracoes.html', alimentadores=[], dataloggers=[])
+
 
 
 @app.route('/configuracoes/alimentador/<int:equipamento_id>')
@@ -5674,16 +6075,23 @@ def configuracoes_alimentador(equipamento_id):
                     flash('Acesso negado a este equipamento', 'danger')
                     return redirect(url_for('configuracoes'))
             
-            # Buscar dados completos do alimentador
+            # QUERY CORRIGIDA - removidas colunas que não existem
             cursor.execute("""
                 SELECT 
                     d.id, d.nome, d.mac_address, d.modelo, d.online,
                     l.id, l.nome,
                     a.id, a.capacidade_racao, a.vazao_media, a.nivel_racao_atual,
-                    ca.id, ca.ativa, ca.horario_inicio, ca.horario_fim,
-                    ca.porcoes_por_dia, ca.quantidade_total_diaria,
-                    ca.intervalo_alimentacao, ca.quantidade_por_alimentacao, ca.dias_semana,
-                    cal.id, cal.constante_a, cal.constante_b, cal.tempo_acionamento
+                    ca.id, 
+                    COALESCE(ca.ativa, false) as ativa,
+                    ca.horario_inicio,
+                    ca.horario_fim,
+                    COALESCE(ca.intervalo_alimentacao, 3600) as intervalo_alimentacao,
+                    COALESCE(ca.quantidade_por_alimentacao, 15.0) as quantidade_por_alimentacao,
+                    COALESCE(ca.dias_semana, '1,2,3,4,5,6,7') as dias_semana,
+                    cal.id, 
+                    COALESCE(cal.constante_a, 0.105) as constante_a,
+                    COALESCE(cal.constante_b, 0.0) as constante_b,
+                    COALESCE(cal.tempo_acionamento, 1050) as tempo_acionamento
                 FROM dispositivos d
                 JOIN localizacoes l ON d.localizacao_id = l.id
                 JOIN alimentadores a ON d.id = a.dispositivo_id
@@ -5698,7 +6106,7 @@ def configuracoes_alimentador(equipamento_id):
                 flash('Alimentador não encontrado', 'danger')
                 return redirect(url_for('configuracoes'))
             
-            # Converter para dicionário
+            # Converter para dicionário com valores calculados
             alimentador = {
                 'id': resultado[0],
                 'nome': resultado[1],
@@ -5715,16 +6123,36 @@ def configuracoes_alimentador(equipamento_id):
                 'ativa': resultado[12] if resultado[12] is not None else False,
                 'horario_inicio': resultado[13].strftime('%H:%M') if resultado[13] else '08:00',
                 'horario_fim': resultado[14].strftime('%H:%M') if resultado[14] else '18:00',
-                'porcoes_por_dia': resultado[15] if resultado[15] is not None else 10,
-                'quantidade_total_diaria': float(resultado[16]) if resultado[16] else 150.0,
-                'intervalo_alimentacao': resultado[17] if resultado[17] else 3600,
-                'quantidade_por_alimentacao': float(resultado[18]) if resultado[18] else 15.0,
-                'dias_semana': resultado[19] if resultado[19] else '1,2,3,4,5,6,7',
-                'calibracao_id': resultado[20],
-                'constante_a': float(resultado[21]) if resultado[21] else 0.105,
-                'constante_b': float(resultado[22]) if resultado[22] else 0.0,
-                'tempo_acionamento': resultado[23] if resultado[23] else 1050
+                'intervalo_alimentacao': resultado[15] if resultado[15] else 3600,
+                'quantidade_por_alimentacao': float(resultado[16]) if resultado[16] else 15.0,
+                'dias_semana': resultado[17] if resultado[17] else '1,2,3,4,5,6,7',
+                'calibracao_id': resultado[18],
+                'constante_a': float(resultado[19]) if resultado[19] else 0.105,
+                'constante_b': float(resultado[20]) if resultado[20] else 0.0,
+                'tempo_acionamento': resultado[21] if resultado[21] else 1050
             }
+            
+            # Calcular porcoes_por_dia baseado no intervalo
+            if alimentador['intervalo_alimentacao'] and alimentador['horario_inicio'] and alimentador['horario_fim']:
+                try:
+                    from datetime import datetime
+                    inicio = datetime.strptime(alimentador['horario_inicio'], '%H:%M')
+                    fim = datetime.strptime(alimentador['horario_fim'], '%H:%M')
+                    minutos_total = (fim - inicio).seconds // 60
+                    if minutos_total < 0:
+                        minutos_total += 24 * 60
+                    intervalo_minutos = alimentador['intervalo_alimentacao'] // 60
+                    if intervalo_minutos > 0:
+                        alimentador['porcoes_por_dia'] = (minutos_total // intervalo_minutos) + 1
+                    else:
+                        alimentador['porcoes_por_dia'] = 10
+                except:
+                    alimentador['porcoes_por_dia'] = 10
+            else:
+                alimentador['porcoes_por_dia'] = 10
+            
+            # Calcular quantidade_total_diaria
+            alimentador['quantidade_total_diaria'] = alimentador['quantidade_por_alimentacao'] * alimentador['porcoes_por_dia']
             
             # Buscar histórico de calibração
             cursor.execute("""
@@ -5777,6 +6205,10 @@ def configuracoes_alimentador(equipamento_id):
                          usuario=session)
 
 
+
+
+
+
 @app.route('/api/configuracoes/alimentador/<int:alimentador_id>', methods=['PUT'])
 @login_required
 def atualizar_config_alimentador(alimentador_id):
@@ -5814,76 +6246,70 @@ def atualizar_config_alimentador(alimentador_id):
                 ativa = config.get('ativa')
                 horario_inicio = config.get('horario_inicio')
                 horario_fim = config.get('horario_fim')
-                porcoes_por_dia = config.get('porcoes_por_dia')
-                quantidade_total_diaria = config.get('quantidade_total_diaria')
                 dias_semana = config.get('dias_semana')
                 
-                # CORREÇÃO: Remover os segundos se existirem
+                # Remover segundos se existirem
                 if horario_inicio and len(horario_inicio) > 5:
-                    horario_inicio = horario_inicio[:5]  # Pega apenas "HH:MM"
+                    horario_inicio = horario_inicio[:5]
                 if horario_fim and len(horario_fim) > 5:
-                    horario_fim = horario_fim[:5]        # Pega apenas "HH:MM"
+                    horario_fim = horario_fim[:5]
                 
                 print(f"   Horários processados: inicio={horario_inicio}, fim={horario_fim}")
                 
-                # Calcular automaticamente os campos derivados
-                quantidade_por_alimentacao = None
-                intervalo_alimentacao = None
+                # Calcular quantidade_por_alimentacao
+                porcoes_por_dia = config.get('porcoes_por_dia', 10)
+                quantidade_total_diaria = config.get('quantidade_total_diaria', 150.0)
+                quantidade_por_alimentacao = quantidade_total_diaria / porcoes_por_dia if porcoes_por_dia > 0 else 15.0
                 
-                if porcoes_por_dia and quantidade_total_diaria and porcoes_por_dia > 0:
-                    quantidade_por_alimentacao = quantidade_total_diaria / porcoes_por_dia
-                    
-                    if horario_inicio and horario_fim:
-                        from datetime import datetime
-                        try:
-                            inicio = datetime.strptime(horario_inicio, '%H:%M')
-                            fim = datetime.strptime(horario_fim, '%H:%M')
-                            minutos_total = (fim - inicio).seconds // 60
-                            if minutos_total < 0:
-                                minutos_total += 24 * 60
-                            
-                            if porcoes_por_dia > 1:
-                                intervalo_minutos = minutos_total // (porcoes_por_dia - 1)
-                            else:
-                                intervalo_minutos = minutos_total
-                            
-                            intervalo_alimentacao = intervalo_minutos * 60
-                            print(f"   Cálculo: minutos_total={minutos_total}, intervalo_minutos={intervalo_minutos}")
-                        except Exception as e:
-                            print(f"   Erro no cálculo do intervalo: {e}")
-                            intervalo_alimentacao = 3600
+                # Calcular intervalo_alimentacao
+                intervalo_alimentacao = 3600
+                if horario_inicio and horario_fim:
+                    from datetime import datetime
+                    try:
+                        inicio = datetime.strptime(horario_inicio, '%H:%M')
+                        fim = datetime.strptime(horario_fim, '%H:%M')
+                        minutos_total = (fim - inicio).seconds // 60
+                        if minutos_total < 0:
+                            minutos_total += 24 * 60
+                        
+                        if porcoes_por_dia > 1:
+                            intervalo_minutos = minutos_total // (porcoes_por_dia - 1)
+                        else:
+                            intervalo_minutos = minutos_total
+                        
+                        intervalo_alimentacao = intervalo_minutos * 60
+                    except Exception as e:
+                        print(f"   Erro no cálculo: {e}")
                 
-                # Inserir ou atualizar configuração
-                cursor.execute("""
-                    INSERT INTO config_alimentadores (
-                        alimentador_id, ativa, horario_inicio, horario_fim,
-                        porcoes_por_dia, quantidade_total_diaria,
-                        intervalo_alimentacao, quantidade_por_alimentacao, dias_semana,
-                        updated_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                    ON CONFLICT (alimentador_id) DO UPDATE SET
-                        ativa = EXCLUDED.ativa,
-                        horario_inicio = EXCLUDED.horario_inicio,
-                        horario_fim = EXCLUDED.horario_fim,
-                        porcoes_por_dia = EXCLUDED.porcoes_por_dia,
-                        quantidade_total_diaria = EXCLUDED.quantidade_total_diaria,
-                        intervalo_alimentacao = EXCLUDED.intervalo_alimentacao,
-                        quantidade_por_alimentacao = EXCLUDED.quantidade_por_alimentacao,
-                        dias_semana = EXCLUDED.dias_semana,
-                        updated_at = CURRENT_TIMESTAMP
-                """, (
-                    alimentador_id,
-                    ativa,
-                    horario_inicio,
-                    horario_fim,
-                    porcoes_por_dia,
-                    quantidade_total_diaria,
-                    intervalo_alimentacao,
-                    quantidade_por_alimentacao,
-                    dias_semana
-                ))
+                # Verificar se já existe configuração
+                cursor.execute("SELECT id FROM config_alimentadores WHERE alimentador_id = %s", (alimentador_id,))
+                existe = cursor.fetchone()
                 
-                print(f"   ✅ Configuração salva: {porcoes_por_dia} porções/dia, {quantidade_total_diaria}g total")
+                if existe:
+                    # UPDATE - apenas colunas que existem
+                    cursor.execute("""
+                        UPDATE config_alimentadores 
+                        SET ativa = COALESCE(%s, ativa),
+                            horario_inicio = COALESCE(%s, horario_inicio),
+                            horario_fim = COALESCE(%s, horario_fim),
+                            intervalo_alimentacao = COALESCE(%s, intervalo_alimentacao),
+                            quantidade_por_alimentacao = COALESCE(%s, quantidade_por_alimentacao),
+                            dias_semana = COALESCE(%s, dias_semana),
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE alimentador_id = %s
+                    """, (ativa, horario_inicio, horario_fim, intervalo_alimentacao, 
+                          quantidade_por_alimentacao, dias_semana, alimentador_id))
+                else:
+                    # INSERT - apenas colunas que existem
+                    cursor.execute("""
+                        INSERT INTO config_alimentadores (
+                            alimentador_id, ativa, horario_inicio, horario_fim,
+                            intervalo_alimentacao, quantidade_por_alimentacao, dias_semana
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (alimentador_id, ativa, horario_inicio, horario_fim, 
+                          intervalo_alimentacao, quantidade_por_alimentacao, dias_semana))
+                
+                print(f"   ✅ Configuração salva")
             
             # ============================================
             # 2. ATUALIZAR CALIBRAÇÃO
@@ -5902,14 +6328,14 @@ def atualizar_config_alimentador(alimentador_id):
                         updated_at = CURRENT_TIMESTAMP
                 """, (
                     alimentador_id,
-                    cal.get('constante_a'),
-                    cal.get('constante_b'),
-                    cal.get('tempo_acionamento')
+                    cal.get('constante_a', 0.105),
+                    cal.get('constante_b', 0.0),
+                    cal.get('tempo_acionamento', 1050)
                 ))
                 print("   ✅ Calibração salva")
             
             # ============================================
-            # 3. ATUALIZAR ALIMENTADOR (dados físicos)
+            # 3. ATUALIZAR ALIMENTADOR
             # ============================================
             if 'alimentador' in data:
                 alm = data['alimentador']
@@ -5928,7 +6354,9 @@ def atualizar_config_alimentador(alimentador_id):
             
             conn.commit()
             
-            # Enviar comando para o ESP32 recarregar configurações
+            # ============================================
+            # 4. ENVIAR COMANDO PARA O ESP32
+            # ============================================
             cursor.execute("""
                 SELECT d.mac_address FROM dispositivos d
                 JOIN alimentadores a ON d.id = a.dispositivo_id
@@ -5938,12 +6366,28 @@ def atualizar_config_alimentador(alimentador_id):
             mac_result = cursor.fetchone()
             if mac_result:
                 mac_address = mac_result[0]
+                
+                # Criar tabela de comandos se não existir
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS comandos_pendentes (
+                        id SERIAL PRIMARY KEY,
+                        mac_address VARCHAR(17) NOT NULL,
+                        comando VARCHAR(50) NOT NULL,
+                        parametros TEXT,
+                        executado BOOLEAN DEFAULT FALSE,
+                        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        executado_em TIMESTAMP,
+                        criado_por INTEGER
+                    )
+                """)
+                
+                # Inserir comando de configurar
                 cursor.execute("""
                     INSERT INTO comandos_pendentes (mac_address, comando, parametros, criado_por)
                     VALUES (%s, %s, %s, %s)
                 """, (mac_address, 'configurar', '{"recarregar": true}', session['usuario_id']))
-                print(f"   ✅ Comando enviado para ESP32: {mac_address}")
                 conn.commit()
+                print(f"   ✅ Comando 'configurar' enviado para ESP32: {mac_address}")
             
             return jsonify({
                 'status': 'sucesso', 
@@ -5960,6 +6404,9 @@ def atualizar_config_alimentador(alimentador_id):
     finally:
         if conn:
             conn.close()
+
+
+
 
 @app.route('/api/configuracoes/alimentador/<int:alimentador_id>/acionar', methods=['POST'])
 @login_required
@@ -6012,11 +6459,28 @@ def acionar_alimentador(alimentador_id):
             else:
                 tempo_calculado = tempo
             
-            # Criar comando pendente
+            # Criar tabela se não existir
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS comandos_pendentes (
+                    id SERIAL PRIMARY KEY,
+                    mac_address VARCHAR(17) NOT NULL,
+                    comando VARCHAR(50) NOT NULL,
+                    parametros TEXT,
+                    executado BOOLEAN DEFAULT FALSE,
+                    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    executado_em TIMESTAMP,
+                    criado_por INTEGER
+                )
+            """)
+            
+            # Criar comando pendente (usando string formatada em vez de json.dumps)
+            parametros = f'{{"tempo": {tempo_calculado}, "peso": {peso}}}'
+            
             cursor.execute("""
                 INSERT INTO comandos_pendentes (mac_address, comando, parametros, criado_por)
                 VALUES (%s, %s, %s, %s)
-            """, (mac_address, 'alimentar', f'{{"tempo": {tempo_calculado}, "peso": {peso}}}', session['usuario_id']))
+                RETURNING id
+            """, (mac_address, 'alimentar', parametros, session['usuario_id']))
             
             conn.commit()
             
@@ -6028,12 +6492,16 @@ def acionar_alimentador(alimentador_id):
             
     except Exception as e:
         print(f"❌ Erro ao acionar alimentador: {e}")
+        import traceback
+        traceback.print_exc()
         if conn:
             conn.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         if conn:
             conn.close()
+
+
 
 # ============================================
 # ROTAS ATUALIZADAS PARA DATALOGGER ESP32
@@ -7182,6 +7650,6 @@ def configuracoes_datalogger(equipamento_id):
 if __name__ == '__main__':
     # Iniciar verificador de offline em background
     iniciar_verificador_offline()
-    
+    criar_tabelas_se_necessario()
     # Rodar a API
     app.run(debug=True, host='0.0.0.0', port=5000)

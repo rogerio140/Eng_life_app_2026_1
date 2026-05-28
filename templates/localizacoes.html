@@ -132,6 +132,24 @@
             box-shadow: 0 10px 20px rgba(46, 139, 87, 0.3);
         }
 
+        .btn-outline-danger {
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-danger:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-outline-secondary {
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-secondary:hover {
+            transform: translateY(-2px);
+        }
+
         .empty-state {
             background: white;
             border-radius: 15px;
@@ -198,6 +216,16 @@
             color: white;
         }
 
+        .card-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .card-actions .btn {
+            flex: 1;
+        }
+
         @media (max-width: 768px) {
             .sidebar {
                 width: 100%;
@@ -211,7 +239,7 @@
     </style>
 </head>
 <body>
-<!-- Sidebar -->
+    <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-brand">
             <div class="d-flex align-items-center">
@@ -223,13 +251,13 @@
 
         <div class="sidebar-nav">
             <div class="nav-item">
-                <a href="{{ url_for('dashboard') }}" class="nav-link active">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">
                     <i class="fas fa-tachometer-alt"></i>
                     Dashboard
                 </a>
             </div>
             <div class="nav-item">
-                <a href="{{ url_for('localizacoes') }}" class="nav-link">
+                <a href="{{ url_for('localizacoes') }}" class="nav-link active">
                     <i class="fas fa-map-marker-alt"></i>
                     Localizações
                 </a>
@@ -247,7 +275,7 @@
                 </a>
             </div>
             <div class="nav-item">
-                <a href="#" class="nav-link">
+                <a href="/configuracoes" class="nav-link">
                     <i class="fas fa-cog"></i>
                     Configurações
                 </a>
@@ -274,6 +302,7 @@
             </div>
         </div>
     </div>
+
     <!-- Main Content -->
     <div class="main-content">
         <!-- Page Header -->
@@ -380,13 +409,13 @@
                             <div class="col-6">
                                 <div class="stats-badge text-primary">
                                     <i class="fas fa-microchip me-1"></i>
-                                    {{ localizacao.total_equipamentos }} Equip.
+                                    {{ localizacao.total_equipamentos|default(0)|int }} Equip.
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="stats-badge text-success">
                                     <i class="fas fa-users me-1"></i>
-                                    {{ localizacao.total_usuarios }} Users
+                                    {{ localizacao.total_usuarios|default(0)|int }} Users
                                 </div>
                             </div>
                         </div>
@@ -403,15 +432,73 @@
                         </small>
                     </div>
 
-                    <div class="d-grid">
+                    <!-- Botões de Ação -->
+                    <div class="card-actions">
                         <a href="{{ url_for('ver_localizacao', localizacao_id=localizacao.id) }}" 
-                           class="btn btn-outline-primary">
-                            <i class="fas fa-eye me-2"></i>
-                            Ver Detalhes
+                           class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-eye me-1"></i>
+                            Ver
                         </a>
+                        {% if session['usuario_tipo'] == 'admin' %}
+                        <a href="{{ url_for('editar_localizacao', localizacao_id=localizacao.id) }}" 
+                           class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-edit me-1"></i>
+                            Editar
+                        </a>
+                        <button type="button" 
+                                class="btn btn-outline-danger btn-sm" 
+                                data-bs-toggle="modal" 
+                                data-bs-target="#deleteModal{{ localizacao.id }}">
+                            <i class="fas fa-trash me-1"></i>
+                            Excluir
+                        </button>
+                        {% endif %}
                     </div>
                 </div>
             </div>
+
+            <!-- Modal de Confirmação de Exclusão -->
+            {% if session['usuario_tipo'] == 'admin' %}
+            <div class="modal fade" id="deleteModal{{ localizacao.id }}" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-exclamation-triangle text-danger me-2"></i>
+                                Confirmar Exclusão
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Tem certeza que deseja excluir a localização <strong>{{ localizacao.nome }}</strong>?</p>
+                            {% set total_equip = localizacao.total_equipamentos|default(0)|int %}
+                            {% if total_equip > 0 %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-warning me-2"></i>
+                                Esta localização possui <strong>{{ total_equip }} equipamento(s)</strong> associado(s).
+                                A exclusão não será permitida enquanto houver equipamentos vinculados.
+                            </div>
+                            {% else %}
+                            <p class="text-muted">Esta ação não pode ser desfeita.</p>
+                            {% endif %}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            {% if total_equip == 0 %}
+                            <form action="{{ url_for('excluir_localizacao', localizacao_id=localizacao.id) }}" method="POST" style="display: inline;">
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="fas fa-trash me-1"></i>
+                                    Sim, Excluir
+                                </button>
+                            </form>
+                            {% else %}
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             {% endfor %}
         </div>
         {% else %}

@@ -211,31 +211,31 @@
 
         <div class="sidebar-nav">
             <div class="nav-item">
-                <a href="{{ url_for('dashboard') }}" class="nav-link active">
+                <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
                     <i class="fas fa-tachometer-alt"></i>
                     Dashboard
                 </a>
             </div>
             <div class="nav-item">
-                <a href="{{ url_for('localizacoes') }}" class="nav-link">
+                <a href="{{ url_for('localizacoes') }}" class="nav-link {% if request.endpoint == 'localizacoes' %}active{% endif %}">
                     <i class="fas fa-map-marker-alt"></i>
                     Localizações
                 </a>
             </div>
             <div class="nav-item">
-                <a href="{{ url_for('equipamentos') }}" class="nav-link">
+                <a href="{{ url_for('equipamentos') }}" class="nav-link {% if request.endpoint == 'equipamentos' %}active{% endif %}">
                     <i class="fas fa-microchip"></i>
                     Equipamentos
                 </a>
             </div>
             <div class="nav-item">
-                <a href="{{ url_for('relatorios') }}" class="nav-link">
+                <a href="{{ url_for('relatorios') }}" class="nav-link {% if request.endpoint == 'relatorios' %}active{% endif %}">
                     <i class="fas fa-chart-line"></i>
                     Relatórios
                 </a>
             </div>
             <div class="nav-item">
-                <a href="/configuracoes" class="nav-link">
+                <a href="{{ url_for('configuracoes') }}" class="nav-link {% if request.endpoint == 'configuracoes' %}active{% endif %}">
                     <i class="fas fa-cog"></i>
                     Configurações
                 </a>
@@ -433,7 +433,7 @@
                     <div class="card-body">
                         <div class="row g-3">
                             <div class="col-6">
-                                <a href="/configuracoes" style="text-decoration: none; color: inherit;">
+                                <a href="{{ url_for('configuracoes') }}" style="text-decoration: none; color: inherit;">
                                     <div class="quick-action">
                                         <div class="action-icon">
                                             <i class="fas fa-sliders-h"></i>
@@ -444,7 +444,7 @@
                                 </a>
                             </div>
                             <div class="col-6">
-                                <a href="/relatorios" style="text-decoration: none; color: inherit;">
+                                <a href="{{ url_for('relatorios') }}" style="text-decoration: none; color: inherit;">
                                     <div class="quick-action">
                                         <div class="action-icon">
                                             <i class="fas fa-chart-bar"></i>
@@ -455,7 +455,7 @@
                                 </a>
                             </div>
                             <div class="col-6">
-                                <a href="/alertas" style="text-decoration: none; color: inherit;">
+                                <a href="#" style="text-decoration: none; color: inherit;">
                                     <div class="quick-action">
                                         <div class="action-icon">
                                             <i class="fas fa-bell"></i>
