@@ -21,6 +21,7 @@
             background-color: #f5f7fa;
         }
 
+        /* Sidebar */
         .sidebar {
             background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%);
             color: white;
@@ -61,6 +62,8 @@
             border-radius: 10px;
             transition: all 0.3s;
             text-decoration: none;
+            display: flex;
+            align-items: center;
         }
 
         .nav-link:hover, .nav-link.active {
@@ -73,12 +76,14 @@
             margin-right: 0.75rem;
         }
 
+        /* Main Content */
         .main-content {
             margin-left: var(--sidebar-width);
             padding: 2rem;
             min-height: 100vh;
         }
 
+        /* Page Header */
         .page-header {
             background: white;
             border-radius: 15px;
@@ -88,6 +93,23 @@
             border-left: 5px solid var(--accent-color);
         }
 
+        .page-header h1 {
+            color: var(--secondary-color);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .admin-badge {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        /* Location Cards */
         .location-card {
             background: white;
             border-radius: 15px;
@@ -110,6 +132,7 @@
             color: var(--primary-color);
         }
 
+        /* Stats Badge */
         .stats-badge {
             background: var(--light-bg);
             border-radius: 10px;
@@ -118,82 +141,58 @@
             font-size: 0.85rem;
         }
 
+        /* Botões */
         .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-            border: none;
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
             border-radius: 10px;
-            padding: 0.75rem 2rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            transition: all 0.3s;
         }
 
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(46, 139, 87, 0.3);
+            background-color: var(--primary-dark);
+            border-color: var(--primary-dark);
+            transform: translateY(-1px);
         }
 
-        .btn-outline-danger {
-            border-radius: 10px;
-            transition: all 0.3s ease;
+        .btn-outline-primary {
+            border-radius: 8px;
+            transition: all 0.3s;
         }
 
-        .btn-outline-danger:hover {
-            transform: translateY(-2px);
+        .btn-outline-primary:hover {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            transform: translateY(-1px);
         }
 
         .btn-outline-secondary {
-            border-radius: 10px;
-            transition: all 0.3s ease;
+            border-radius: 8px;
+            transition: all 0.3s;
         }
 
         .btn-outline-secondary:hover {
-            transform: translateY(-2px);
-        }
-
-        .empty-state {
-            background: white;
-            border-radius: 15px;
-            padding: 4rem 2rem;
-            text-align: center;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-        }
-
-        .empty-state-icon {
-            font-size: 4rem;
-            color: #bdc3c7;
-            margin-bottom: 1.5rem;
-        }
-
-        .admin-badge {
-            background: linear-gradient(135deg, #f39c12, #e67e22);
+            background-color: #6c757d;
+            border-color: #6c757d;
+            transform: translateY(-1px);
             color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
         }
 
-        .stats-card {
-            background: white;
-            border-radius: 15px;
-            padding: 1.5rem;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-            text-align: center;
-            transition: all 0.3s ease;
-            border: none;
+        .btn-outline-danger {
+            border-radius: 8px;
+            transition: all 0.3s;
         }
 
-        .stats-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        .btn-outline-danger:hover {
+            background-color: #dc3545;
+            border-color: #dc3545;
+            transform: translateY(-1px);
+            color: white;
         }
 
-        .stats-number {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-        }
-
+        /* Type Badges */
         .type-badge {
             padding: 0.5rem 1rem;
             border-radius: 20px;
@@ -216,6 +215,44 @@
             color: white;
         }
 
+        /* Stats Cards */
+        .stats-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Empty State */
+        .empty-state {
+            background: white;
+            border-radius: 15px;
+            padding: 4rem 2rem;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            color: #bdc3c7;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Card Actions */
         .card-actions {
             display: flex;
             gap: 0.5rem;
@@ -226,6 +263,28 @@
             flex: 1;
         }
 
+        /* User Info */
+        .user-info {
+            background: var(--light-bg);
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+        }
+
+        /* Modal */
+        .modal-content {
+            border-radius: 15px;
+            border: none;
+        }
+
+        .modal-header {
+            border-bottom: none;
+        }
+
+        .modal-footer {
+            border-top: none;
+        }
+
+        /* Responsive */
         @media (max-width: 768px) {
             .sidebar {
                 width: 100%;
@@ -275,7 +334,7 @@
                 </a>
             </div>
             <div class="nav-item">
-                <a href="/configuracoes" class="nav-link">
+                <a href="{{ url_for('configuracoes') }}" class="nav-link">
                     <i class="fas fa-cog"></i>
                     Configurações
                 </a>
@@ -309,26 +368,46 @@
         <div class="page-header">
             <div class="row align-items-center">
                 <div class="col-md-8">
-                    <h1 class="display-6 fw-bold">
-                        <i class="fas fa-map-marker-alt me-3 text-primary"></i>
+                    <h1>
+                        <i class="fas fa-map-marker-alt me-2"></i>
                         Gerenciar Localizações
                     </h1>
                     <p class="lead text-muted mb-0">
                         Organize estufas, setores e áreas do sistema
-                        {% if session['usuario_tipo'] == 'admin' %}
-                            <span class="admin-badge ms-2">
-                                <i class="fas fa-crown me-1"></i>
-                                Modo Administrador
-                            </span>
-                        {% endif %}
                     </p>
+                    {% if session['usuario_tipo'] == 'admin' %}
+                        <div class="admin-badge mt-2">
+                            <i class="fas fa-crown me-1"></i>
+                            Modo Administrador
+                        </div>
+                    {% endif %}
                 </div>
                 <div class="col-md-4 text-end">
-                    <a href="{{ url_for('cadastrar_localizacao') }}" class="btn btn-primary btn-lg">
-                        <i class="fas fa-plus me-2"></i>
-                        Nova Localização
-                    </a>
+                    <div class="user-info">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ session.get('usuario_nome', 'Usuário') }}</strong>
+                                <div class="badge bg-primary mt-1">{{ session.get('usuario_tipo', 'usuário')|title }}</div>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-success">
+                                    <i class="fas fa-circle me-1"></i>
+                                    Sessão Ativa
+                                </small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Botão Nova Localização -->
+        <div class="row mb-4">
+            <div class="col-12 text-end">
+                <a href="{{ url_for('cadastrar_localizacao') }}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>
+                    Nova Localização
+                </a>
             </div>
         </div>
 
@@ -401,7 +480,7 @@
                     <h5 class="fw-bold mb-2">{{ localizacao.nome }}</h5>
                     
                     {% if localizacao.descricao %}
-                    <p class="text-muted mb-3">{{ localizacao.descricao }}</p>
+                    <p class="text-muted mb-3 small">{{ localizacao.descricao }}</p>
                     {% endif %}
 
                     <div class="location-stats mb-3">
@@ -409,13 +488,13 @@
                             <div class="col-6">
                                 <div class="stats-badge text-primary">
                                     <i class="fas fa-microchip me-1"></i>
-                                    {{ localizacao.total_equipamentos|default(0)|int }} Equip.
+                                    {{ localizacao.total_equipamentos|default(0)|int }} Equipamentos
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="stats-badge text-success">
                                     <i class="fas fa-users me-1"></i>
-                                    {{ localizacao.total_usuarios|default(0)|int }} Users
+                                    {{ localizacao.total_usuarios|default(0)|int }} Usuários
                                 </div>
                             </div>
                         </div>
@@ -425,9 +504,14 @@
                         <small class="text-muted">
                             <i class="fas fa-calendar me-1"></i>
                             {% if localizacao.created_at %}
-                                Criada em {{ localizacao.created_at.strftime('%d/%m/%Y') }}
+                                Criada em 
+                                {% if localizacao.created_at.strftime %}
+                                    {{ localizacao.created_at.strftime('%d/%m/%Y') }}
+                                {% else %}
+                                    {{ localizacao.created_at }}
+                                {% endif %}
                             {% else %}
-                                Data de criação não disponível
+                                Data não disponível
                             {% endif %}
                         </small>
                     </div>
@@ -436,63 +520,96 @@
                     <div class="card-actions">
                         <a href="{{ url_for('ver_localizacao', localizacao_id=localizacao.id) }}" 
                            class="btn btn-outline-primary btn-sm">
-                            <i class="fas fa-eye me-1"></i>
-                            Ver
+                            <i class="fas fa-eye me-1"></i> Ver
                         </a>
                         {% if session['usuario_tipo'] == 'admin' %}
                         <a href="{{ url_for('editar_localizacao', localizacao_id=localizacao.id) }}" 
                            class="btn btn-outline-secondary btn-sm">
-                            <i class="fas fa-edit me-1"></i>
-                            Editar
+                            <i class="fas fa-edit me-1"></i> Editar
                         </a>
                         <button type="button" 
                                 class="btn btn-outline-danger btn-sm" 
                                 data-bs-toggle="modal" 
                                 data-bs-target="#deleteModal{{ localizacao.id }}">
-                            <i class="fas fa-trash me-1"></i>
-                            Excluir
+                            <i class="fas fa-trash me-1"></i> Excluir
                         </button>
                         {% endif %}
                     </div>
                 </div>
             </div>
 
-            <!-- Modal de Confirmação de Exclusão -->
+            <!-- Modal de Confirmação de Exclusão (apenas para admin) -->
             {% if session['usuario_tipo'] == 'admin' %}
             <div class="modal fade" id="deleteModal{{ localizacao.id }}" tabindex="-1">
-                <div class="modal-dialog">
+                <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
-                        <div class="modal-header">
+                        <div class="modal-header bg-danger text-white">
                             <h5 class="modal-title">
-                                <i class="fas fa-exclamation-triangle text-danger me-2"></i>
+                                <i class="fas fa-exclamation-triangle me-2"></i>
                                 Confirmar Exclusão
                             </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <p>Tem certeza que deseja excluir a localização <strong>{{ localizacao.nome }}</strong>?</p>
+                            <div class="text-center mb-4">
+                                <i class="fas fa-trash-alt fa-3x text-danger mb-3"></i>
+                                <h4 class="text-danger">Atenção!</h4>
+                            </div>
+                            
+                            <p class="text-center">
+                                Você está prestes a excluir a localização:
+                            </p>
+                            
+                            <div class="alert alert-warning text-center">
+                                <strong class="fs-5">{{ localizacao.nome }}</strong><br>
+                                <small>Tipo: {{ localizacao.tipo|title }}</small>
+                            </div>
+                            
                             {% set total_equip = localizacao.total_equipamentos|default(0)|int %}
                             {% if total_equip > 0 %}
-                            <div class="alert alert-warning">
-                                <i class="fas fa-warning me-2"></i>
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-circle me-2"></i>
+                                <strong>Não é possível excluir!</strong><br>
                                 Esta localização possui <strong>{{ total_equip }} equipamento(s)</strong> associado(s).
-                                A exclusão não será permitida enquanto houver equipamentos vinculados.
+                                <hr>
+                                <small>Remova todos os equipamentos desta localização antes de tentar excluí-la.</small>
                             </div>
                             {% else %}
-                            <p class="text-muted">Esta ação não pode ser desfeita.</p>
+                            <div class="alert alert-danger">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-exclamation-circle me-2"></i>
+                                    Esta ação não pode ser desfeita!
+                                </h6>
+                                <p class="mb-0 small">
+                                    Todos os dados relacionados a esta localização serão permanentemente excluídos.
+                                </p>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="confirmCheckbox{{ localizacao.id }}">
+                                <label class="form-check-label text-danger fw-bold" for="confirmCheckbox{{ localizacao.id }}">
+                                    Sim, eu entendo e desejo excluir esta localização permanentemente
+                                </label>
+                            </div>
                             {% endif %}
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times me-2"></i>
+                                Cancelar
+                            </button>
                             {% if total_equip == 0 %}
                             <form action="{{ url_for('excluir_localizacao', localizacao_id=localizacao.id) }}" method="POST" style="display: inline;">
-                                <button type="submit" class="btn btn-danger">
-                                    <i class="fas fa-trash me-1"></i>
-                                    Sim, Excluir
+                                <button type="submit" class="btn btn-danger" id="confirmDeleteBtn{{ localizacao.id }}" disabled>
+                                    <i class="fas fa-trash me-2"></i>
+                                    Excluir Permanentemente
                                 </button>
                             </form>
                             {% else %}
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times me-2"></i>
+                                Fechar
+                            </button>
                             {% endif %}
                         </div>
                     </div>
@@ -515,7 +632,7 @@
                     Você ainda não tem localizações cadastradas.
                 {% endif %}
             </p>
-            <a href="{{ url_for('cadastrar_localizacao') }}" class="btn btn-primary btn-lg">
+            <a href="{{ url_for('cadastrar_localizacao') }}" class="btn btn-primary">
                 <i class="fas fa-plus me-2"></i>
                 Cadastrar Primeira Localização
             </a>
@@ -544,5 +661,24 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Controlar checkbox de confirmação para cada modal
+        {% if localizacoes %}
+            {% for localizacao in localizacoes %}
+                {% set total_equip = localizacao.total_equipamentos|default(0)|int %}
+                {% if total_equip == 0 and session['usuario_tipo'] == 'admin' %}
+                (function() {
+                    const checkbox = document.getElementById('confirmCheckbox{{ localizacao.id }}');
+                    const deleteBtn = document.getElementById('confirmDeleteBtn{{ localizacao.id }}');
+                    if (checkbox && deleteBtn) {
+                        checkbox.addEventListener('change', function() {
+                            deleteBtn.disabled = !this.checked;
+                        });
+                    }
+                })();
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    </script>
 </body>
 </html>

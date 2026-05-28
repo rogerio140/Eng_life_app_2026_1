@@ -413,30 +413,71 @@ def equipamentos():
     
     try:
         with conn.cursor() as cursor:
+            # Definir timeout para considerar offline (2 minutos sem comunicação)
+            timeout_minutos = 2
+            
             if session['usuario_tipo'] == 'admin':
                 # Admin vê todos os dispositivos
                 cursor.execute("""
-                    SELECT DISTINCT d.*, l.nome as localizacao_nome,
-                           CASE 
-                               WHEN a.id IS NOT NULL THEN 'alimentador'
-                               WHEN dl.id IS NOT NULL THEN 'datalogger'
-                               ELSE 'dispositivo'
-                           END as tipo_especifico
+                    SELECT DISTINCT 
+                        d.id, 
+                        d.localizacao_id, 
+                        d.nome, 
+                        d.descricao, 
+                        d.mac_address, 
+                        d.ip_address, 
+                        d.tipo, 
+                        d.modelo, 
+                        d.online as status_db,
+                        d.ultima_comunicacao,
+                        d.created_at, 
+                        d.updated_at, 
+                        l.nome as localizacao_nome,
+                        CASE 
+                            WHEN a.id IS NOT NULL THEN 'alimentador'
+                            WHEN dl.id IS NOT NULL THEN 'datalogger'
+                            ELSE 'dispositivo'
+                        END as tipo_especifico,
+                        -- Calcular status real baseado na última comunicação
+                        CASE 
+                            WHEN d.ultima_comunicacao IS NULL THEN false
+                            WHEN d.ultima_comunicacao > NOW() - INTERVAL '%s minutes' THEN true
+                            ELSE false
+                        END as online_real
                     FROM dispositivos d
                     JOIN localizacoes l ON d.localizacao_id = l.id
                     LEFT JOIN alimentadores a ON d.id = a.dispositivo_id
                     LEFT JOIN dataloggers dl ON d.id = dl.dispositivo_id
                     ORDER BY d.nome
-                """)
+                """, (timeout_minutos,))
             else:
                 # Usuário normal vê apenas dispositivos das suas localizações
                 cursor.execute("""
-                    SELECT DISTINCT d.*, l.nome as localizacao_nome,
-                           CASE 
-                               WHEN a.id IS NOT NULL THEN 'alimentador'
-                               WHEN dl.id IS NOT NULL THEN 'datalogger'
-                               ELSE 'dispositivo'
-                           END as tipo_especifico
+                    SELECT DISTINCT 
+                        d.id, 
+                        d.localizacao_id, 
+                        d.nome, 
+                        d.descricao, 
+                        d.mac_address, 
+                        d.ip_address, 
+                        d.tipo, 
+                        d.modelo, 
+                        d.online as status_db,
+                        d.ultima_comunicacao,
+                        d.created_at, 
+                        d.updated_at, 
+                        l.nome as localizacao_nome,
+                        CASE 
+                            WHEN a.id IS NOT NULL THEN 'alimentador'
+                            WHEN dl.id IS NOT NULL THEN 'datalogger'
+                            ELSE 'dispositivo'
+                        END as tipo_especifico,
+                        -- Calcular status real baseado na última comunicação
+                        CASE 
+                            WHEN d.ultima_comunicacao IS NULL THEN false
+                            WHEN d.ultima_comunicacao > NOW() - INTERVAL '%s minutes' THEN true
+                            ELSE false
+                        END as online_real
                     FROM dispositivos d
                     JOIN localizacoes l ON d.localizacao_id = l.id
                     JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
@@ -444,24 +485,51 @@ def equipamentos():
                     LEFT JOIN dataloggers dl ON d.id = dl.dispositivo_id
                     WHERE ul.usuario_id = %s
                     ORDER BY d.nome
-                """, (session['usuario_id'],))
+                """, (timeout_minutos, session['usuario_id']))
             
-            dispositivos = cursor.fetchall()
+            dispositivos_raw = cursor.fetchall()
             
-            # Converter para lista de dicionários
-            colunas = ['id', 'localizacao_id', 'nome', 'descricao', 'mac_address', 
-                      'ip_address', 'tipo', 'modelo', 'online', 'ultima_comunicacao',
-                      'created_at', 'updated_at', 'localizacao_nome', 'tipo_especifico']
-            
-            dispositivos_dict = [dict(zip(colunas, dispositivo)) for dispositivo in dispositivos]
+            # Converter para lista de dicionários com status corrigido
+            dispositivos_dict = []
+            for row in dispositivos_raw:
+                # Obter o status real (usando online_real que calculamos na query)
+                online_real = row[15] if len(row) > 15 else row[8]  # online_real ou fallback para status_db
+                
+                # Se a última comunicação for None, considerar offline
+                if row[9] is None:  # ultima_comunicacao
+                    online_real = False
+                
+                dispositivo = {
+                    'id': row[0],
+                    'localizacao_id': row[1],
+                    'nome': row[2],
+                    'descricao': row[3],
+                    'mac_address': row[4],
+                    'ip_address': row[5],
+                    'tipo': row[6],
+                    'modelo': row[7],
+                    'online': online_real,  # Usar o status calculado
+                    'ultima_comunicacao': row[9],
+                    'created_at': row[10],
+                    'updated_at': row[11],
+                    'localizacao_nome': row[12],
+                    'tipo_especifico': row[13]
+                }
+                dispositivos_dict.append(dispositivo)
+                
+                # Log para debug (opcional, pode remover depois)
+                print(f"📡 {dispositivo['nome']}: {'ONLINE' if dispositivo['online'] else 'OFFLINE'} - Última comunicação: {dispositivo['ultima_comunicacao']}")
             
     except Exception as e:
         print(f"❌ Erro ao buscar dispositivos: {e}")
+        import traceback
+        traceback.print_exc()
         dispositivos_dict = []
     finally:
         conn.close()
     
     return render_template('equipamentos.html', dispositivos=dispositivos_dict)
+
 
 
 @app.route('/equipamentos/cadastrar')
@@ -1190,6 +1258,7 @@ def salvar_localizacao():
     
     return redirect(url_for('localizacoes'))
 
+
 @app.route('/localizacoes/<int:localizacao_id>')
 def ver_localizacao(localizacao_id):
     """Visualizar detalhes de uma localização"""
@@ -1242,29 +1311,54 @@ def ver_localizacao(localizacao_id):
             colunas = ['id', 'nome', 'descricao', 'tipo', 'created_at', 'total_equipamentos', 'total_usuarios']
             localizacao_dict = dict(zip(colunas, localizacao))
             
-            # Buscar equipamentos da localização
+            # Buscar equipamentos da localização com status CORRIGIDO
+            timeout_minutos = 2  # 2 minutos sem heartbeat = offline
+            
             cursor.execute("""
-                SELECT d.*,
-                       CASE 
-                           WHEN a.id IS NOT NULL THEN 'alimentador'
-                           WHEN dl.id IS NOT NULL THEN 'datalogger'
-                           ELSE 'dispositivo'
-                       END as tipo_especifico
+                SELECT 
+                    d.id, d.nome, d.descricao, d.mac_address, d.ip_address,
+                    d.tipo, d.modelo, d.online as status_db, d.ultima_comunicacao,
+                    CASE 
+                        WHEN a.id IS NOT NULL THEN 'alimentador'
+                        WHEN dl.id IS NOT NULL THEN 'datalogger'
+                        ELSE 'dispositivo'
+                    END as tipo_especifico,
+                    -- Calcular status REAL baseado na última comunicação
+                    CASE 
+                        WHEN d.ultima_comunicacao IS NULL THEN false
+                        WHEN d.ultima_comunicacao > NOW() - INTERVAL '%s minutes' THEN true
+                        ELSE false
+                    END as online_real
                 FROM dispositivos d
                 LEFT JOIN alimentadores a ON d.id = a.dispositivo_id
                 LEFT JOIN dataloggers dl ON d.id = dl.dispositivo_id
                 WHERE d.localizacao_id = %s
                 ORDER BY d.nome
-            """, (localizacao_id,))
+            """, (timeout_minutos, localizacao_id))
             
-            equipamentos = cursor.fetchall()
-            colunas_equip = ['id', 'localizacao_id', 'nome', 'descricao', 'mac_address', 
-                            'ip_address', 'tipo', 'modelo', 'online', 'ultima_comunicacao',
-                            'created_at', 'updated_at', 'tipo_especifico']
-            equipamentos_dict = [dict(zip(colunas_equip, equipamento)) for equipamento in equipamentos]
+            equipamentos_raw = cursor.fetchall()
+            
+            # Converter para lista de dicionários com status corrigido
+            equipamentos_dict = []
+            colunas_equip = ['id', 'nome', 'descricao', 'mac_address', 'ip_address',
+                            'tipo', 'modelo', 'status_db', 'ultima_comunicacao',
+                            'tipo_especifico', 'online_real']
+            
+            for equip in equipamentos_raw:
+                equip_dict = dict(zip(colunas_equip, equip))
+                # Usar o status real calculado
+                equip_dict['online'] = equip_dict['online_real']
+                
+                # Log para debug (opcional)
+                status_texto = "ONLINE" if equip_dict['online'] else "OFFLINE"
+                print(f"📡 {equip_dict['nome']}: {status_texto} - Última comunicação: {equip_dict['ultima_comunicacao']}")
+                
+                equipamentos_dict.append(equip_dict)
             
     except Exception as e:
         print(f"❌ Erro ao buscar localização: {e}")
+        import traceback
+        traceback.print_exc()
         flash('Erro ao carregar localização.', 'danger')
         return redirect(url_for('localizacoes'))
     finally:
@@ -1273,6 +1367,7 @@ def ver_localizacao(localizacao_id):
     return render_template('ver_localizacao.html', 
                          localizacao=localizacao_dict, 
                          equipamentos=equipamentos_dict)
+
 
 # ====================
 # ROTAS DE USUÁRIOS (APENAS ADMIN)
@@ -1690,7 +1785,139 @@ def excluir_usuario(usuario_id):
 # ====================
 # ROTAS DE RELATÓRIOS - CORRIGIDAS
 # ====================
+@app.route('/relatorios/dados/<int:datalogger_id>', methods=['GET'])
 
+def obter_dados_relatorio_get(datalogger_id):
+    """
+    API para buscar dados do datalogger via GET (usado pelo front-end moderno)
+    """
+    try:
+        # Obter parâmetros de data da query string
+        data_inicio = request.args.get('data_inicio')
+        data_fim = request.args.get('data_fim')
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão com o banco'}), 500
+        
+        with conn.cursor() as cursor:
+            # Verificar se o usuário tem acesso a este datalogger
+            if session['usuario_tipo'] != 'admin':
+                cursor.execute("""
+                    SELECT 1 
+                    FROM dispositivos d
+                    JOIN localizacoes l ON d.localizacao_id = l.id
+                    JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
+                    WHERE d.id = %s AND ul.usuario_id = %s AND d.tipo = 'datalogger'
+                """, (datalogger_id, session['usuario_id']))
+                
+                if not cursor.fetchone():
+                    return jsonify({'error': 'Acesso negado a este datalogger'}), 403
+            
+            # Buscar informações do datalogger
+            cursor.execute("""
+                SELECT d.nome, l.nome as localizacao_nome, dl.quantidade_sensores
+                FROM dispositivos d
+                JOIN dataloggers dl ON d.id = dl.dispositivo_id
+                JOIN localizacoes l ON d.localizacao_id = l.id
+                WHERE d.id = %s AND d.tipo = 'datalogger'
+            """, (datalogger_id,))
+            
+            datalogger_info = cursor.fetchone()
+            
+            if not datalogger_info:
+                return jsonify({'error': 'Datalogger não encontrado'}), 404
+            
+            # Construir query para buscar leituras
+            query = """
+                SELECT 
+                    s.id as sensor_id,
+                    s.nome as sensor_nome,
+                    s.posicao,
+                    s.unidade,
+                    ls.valor,
+                    ls.timestamp
+                FROM sensores s
+                JOIN leituras_sensores ls ON s.id = ls.sensor_id
+                WHERE s.datalogger_id = (
+                    SELECT dl.id 
+                    FROM dataloggers dl 
+                    JOIN dispositivos d ON dl.dispositivo_id = d.id
+                    WHERE d.id = %s
+                )
+            """
+            params = [datalogger_id]
+            
+            if data_inicio:
+                query += " AND DATE(ls.timestamp) >= %s"
+                params.append(data_inicio)
+            
+            if data_fim:
+                query += " AND DATE(ls.timestamp) <= %s"
+                params.append(data_fim)
+            
+            query += " ORDER BY ls.timestamp ASC"
+            
+            cursor.execute(query, params)
+            dados = cursor.fetchall()
+            
+            # Processar dados para o formato esperado pelo front-end
+            dados_processados = {}
+            estatisticas = {}
+            
+            for row in dados:
+                posicao = row[2]  # posicao
+                if posicao not in dados_processados:
+                    dados_processados[posicao] = {
+                        'nome': row[1],  # sensor_nome
+                        'dados': []
+                    }
+                    estatisticas[posicao] = {
+                        'nome': row[1],
+                        'valores': []
+                    }
+                
+                dados_processados[posicao]['dados'].append({
+                    'x': row[5].isoformat() if hasattr(row[5], 'isoformat') else str(row[5]),
+                    'y': float(row[4])
+                })
+                
+                estatisticas[posicao]['valores'].append(float(row[4]))
+            
+            # Calcular estatísticas finais
+            estatisticas_finais = {}
+            for posicao, stats in estatisticas.items():
+                valores = stats['valores']
+                if valores:
+                    estatisticas_finais[posicao] = {
+                        'nome': stats['nome'],
+                        'media': round(sum(valores) / len(valores), 1),
+                        'min': round(min(valores), 1),
+                        'max': round(max(valores), 1),
+                        'total': len(valores)
+                    }
+            
+            return jsonify({
+                'success': True,
+                'datalogger': {
+                    'id': datalogger_id,
+                    'nome': datalogger_info[0],
+                    'localizacao': datalogger_info[1],
+                    'sensores': datalogger_info[2]
+                },
+                'dados': dados_processados,
+                'estatisticas': estatisticas_finais,
+                'total_leituras': len(dados)
+            })
+            
+    except Exception as e:
+        print(f"❌ Erro ao buscar dados do relatório: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 @app.route('/relatorios')
 def relatorios():
     """Página principal de relatórios"""
@@ -1816,6 +2043,7 @@ def relatorios():
     return render_template('relatorios.html', 
                          dataloggers=dataloggers_dict, 
                          dados={})
+
 
 @app.route('/relatorios/dados', methods=['POST'])
 def obter_dados_relatorio():
@@ -2058,6 +2286,8 @@ def obter_periodo_datalogger(datalogger_id):
         return jsonify({'error': str(e)}), 500
     finally:
         conn.close()
+
+
 
 @app.route('/relatorios/resumo')
 def resumo_dados():

@@ -21,6 +21,7 @@
             background-color: #f5f7fa;
         }
 
+        /* Sidebar */
         .sidebar {
             background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%);
             color: white;
@@ -61,6 +62,8 @@
             border-radius: 10px;
             transition: all 0.3s;
             text-decoration: none;
+            display: flex;
+            align-items: center;
         }
 
         .nav-link:hover, .nav-link.active {
@@ -73,12 +76,14 @@
             margin-right: 0.75rem;
         }
 
+        /* Main Content */
         .main-content {
             margin-left: var(--sidebar-width);
             padding: 2rem;
             min-height: 100vh;
         }
 
+        /* Page Header */
         .page-header {
             background: white;
             border-radius: 15px;
@@ -88,6 +93,13 @@
             border-left: 5px solid var(--accent-color);
         }
 
+        .page-header h1 {
+            color: var(--secondary-color);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Info Cards */
         .info-card {
             background: white;
             border-radius: 15px;
@@ -103,20 +115,44 @@
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
         }
 
+        /* Equipment Cards */
         .equipment-card {
             background: white;
-            border-radius: 15px;
-            padding: 1.5rem;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-            border-left: 4px solid var(--accent-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid rgba(0, 0, 0, 0.05);
             transition: all 0.3s ease;
             margin-bottom: 1rem;
+            position: relative;
+            overflow: hidden;
         }
 
         .equipment-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 10px 25px rgba(46, 139, 87, 0.15);
             transform: translateX(5px);
         }
 
+        /* Barra lateral de status */
+        .equipment-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            border-radius: 4px 0 0 4px;
+        }
+
+        .equipment-card.alimentador::before {
+            background: #e74c3c;
+        }
+
+        .equipment-card.datalogger::before {
+            background: #3498db;
+        }
+
+        /* Type Badges */
         .type-badge {
             padding: 0.5rem 1rem;
             border-radius: 20px;
@@ -139,6 +175,28 @@
             color: white;
         }
 
+        /* Status Badge - CORRIGIDO */
+        .status-badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-online {
+            background-color: rgba(40, 167, 69, 0.15);
+            color: #28a745;
+        }
+
+        .status-offline {
+            background-color: rgba(108, 117, 125, 0.15);
+            color: #6c757d;
+        }
+
+        /* Stats Badge */
         .stats-badge {
             background: var(--light-bg);
             border-radius: 10px;
@@ -147,6 +205,7 @@
             font-size: 0.85rem;
         }
 
+        /* Empty State */
         .empty-state {
             background: white;
             border-radius: 15px;
@@ -161,6 +220,54 @@
             margin-bottom: 1rem;
         }
 
+        /* Botões */
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            border-radius: 10px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            border-color: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-outline-primary {
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .btn-outline-primary:hover {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            transform: translateY(-1px);
+            color: white;
+        }
+
+        .btn-outline-secondary {
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .btn-outline-secondary:hover {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            transform: translateY(-1px);
+            color: white;
+        }
+
+        /* User Info */
+        .user-info {
+            background: var(--light-bg);
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+        }
+
+        /* Responsive */
         @media (max-width: 768px) {
             .sidebar {
                 width: 100%;
@@ -171,10 +278,14 @@
                 margin-left: 0;
             }
         }
+
+        .text-gradient {
+            color: var(--secondary-color);
+        }
     </style>
 </head>
 <body>
-<!-- Sidebar -->
+    <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-brand">
             <div class="d-flex align-items-center">
@@ -186,13 +297,13 @@
 
         <div class="sidebar-nav">
             <div class="nav-item">
-                <a href="{{ url_for('dashboard') }}" class="nav-link active">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">
                     <i class="fas fa-tachometer-alt"></i>
                     Dashboard
                 </a>
             </div>
             <div class="nav-item">
-                <a href="{{ url_for('localizacoes') }}" class="nav-link">
+                <a href="{{ url_for('localizacoes') }}" class="nav-link active">
                     <i class="fas fa-map-marker-alt"></i>
                     Localizações
                 </a>
@@ -210,7 +321,7 @@
                 </a>
             </div>
             <div class="nav-item">
-                <a href="#" class="nav-link">
+                <a href="{{ url_for('configuracoes') }}" class="nav-link">
                     <i class="fas fa-cog"></i>
                     Configurações
                 </a>
@@ -237,14 +348,15 @@
             </div>
         </div>
     </div>
+
     <!-- Main Content -->
     <div class="main-content">
         <!-- Page Header -->
         <div class="page-header">
             <div class="row align-items-center">
                 <div class="col-md-8">
-                    <h1 class="display-6 fw-bold">
-                        <i class="fas fa-map-marker-alt me-3 text-primary"></i>
+                    <h1>
+                        <i class="fas fa-map-marker-alt me-2 text-primary"></i>
                         {{ localizacao.nome }}
                     </h1>
                     <p class="lead text-muted mb-0">
@@ -252,7 +364,25 @@
                     </p>
                 </div>
                 <div class="col-md-4 text-end">
-                    <a href="{{ url_for('localizacoes') }}" class="btn btn-outline-secondary">
+                    <div class="user-info">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ session.get('usuario_nome', 'Usuário') }}</strong>
+                                <div class="badge bg-primary mt-1">{{ session.get('usuario_tipo', 'usuário')|title }}</div>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-success">
+                                    <i class="fas fa-circle me-1"></i>
+                                    Sessão Ativa
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <a href="{{ url_for('localizacoes') }}" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-arrow-left me-2"></i>
                         Voltar para Lista
                     </a>
@@ -277,8 +407,8 @@
             <!-- Informações da Localização -->
             <div class="col-lg-6 mb-4">
                 <div class="info-card">
-                    <h4 class="mb-4 text-gradient">
-                        <i class="fas fa-info-circle me-2"></i>
+                    <h4 class="mb-4">
+                        <i class="fas fa-info-circle me-2 text-primary"></i>
                         Informações Gerais
                     </h4>
                     
@@ -294,7 +424,7 @@
                             <strong class="text-muted d-block">Estatísticas</strong>
                             <div class="stats-badge text-primary">
                                 <i class="fas fa-microchip me-1"></i>
-                                {{ localizacao.total_equipamentos }} Equipamentos
+                                {{ localizacao.total_equipamentos|default(0) }} Equipamentos
                             </div>
                         </div>
                         
@@ -302,7 +432,7 @@
                             <strong class="text-muted d-block">Usuários com Acesso</strong>
                             <div class="stats-badge text-success">
                                 <i class="fas fa-users me-1"></i>
-                                {{ localizacao.total_usuarios }} Usuários
+                                {{ localizacao.total_usuarios|default(0) }} Usuários
                             </div>
                         </div>
 
@@ -315,7 +445,11 @@
                             <strong class="text-muted d-block">Criada em</strong>
                             <small class="text-muted">
                                 {% if localizacao.created_at %}
-                                    {{ localizacao.created_at.strftime('%d/%m/%Y %H:%M') }}
+                                    {% if localizacao.created_at.strftime %}
+                                        {{ localizacao.created_at.strftime('%d/%m/%Y %H:%M') }}
+                                    {% else %}
+                                        {{ localizacao.created_at }}
+                                    {% endif %}
                                 {% else %}
                                     Data não disponível
                                 {% endif %}
@@ -329,8 +463,8 @@
             <div class="col-lg-6 mb-4">
                 <div class="info-card">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h4 class="text-gradient mb-0">
-                            <i class="fas fa-microchip me-2"></i>
+                        <h4 class="mb-0">
+                            <i class="fas fa-microchip me-2 text-primary"></i>
                             Equipamentos
                         </h4>
                         <span class="badge bg-primary fs-6">{{ equipamentos|length }}</span>
@@ -339,31 +473,37 @@
                     {% if equipamentos %}
                         <div class="equipment-list">
                             {% for equipamento in equipamentos %}
-                                <div class="equipment-card">
+                                <div class="equipment-card {{ equipamento.tipo_especifico }}">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
                                         <h6 class="mb-0 fw-bold">{{ equipamento.nome }}</h6>
-                                        {% if equipamento.tipo_especifico == 'alimentador' %}
-                                            <span class="badge bg-danger">Alimentador</span>
-                                        {% elif equipamento.tipo_especifico == 'datalogger' %}
-                                            <span class="badge bg-info">Datalogger</span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">Dispositivo</span>
-                                        {% endif %}
+                                        <div class="text-end">
+                                            {% if equipamento.tipo_especifico == 'alimentador' %}
+                                                <span class="badge bg-danger">Alimentador</span>
+                                            {% elif equipamento.tipo_especifico == 'datalogger' %}
+                                                <span class="badge bg-info">Datalogger</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Dispositivo</span>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                     
                                     <div class="equipment-info">
-                                        <div class="row text-sm">
+                                        <div class="row">
                                             <div class="col-6">
                                                 <small class="text-muted">Status</small><br>
                                                 {% if equipamento.online %}
-                                                    <span class="badge bg-success">Online</span>
+                                                    <span class="status-badge status-online">
+                                                        <i class="fas fa-circle me-1"></i>Online
+                                                    </span>
                                                 {% else %}
-                                                    <span class="badge bg-secondary">Offline</span>
+                                                    <span class="status-badge status-offline">
+                                                        <i class="fas fa-circle me-1"></i>Offline
+                                                    </span>
                                                 {% endif %}
                                             </div>
                                             <div class="col-6">
-                                                <small class="text-muted">MAC</small><br>
-                                                <code class="text-sm">{{ equipamento.mac_address }}</code>
+                                                <small class="text-muted">MAC Address</small><br>
+                                                <code class="small">{{ equipamento.mac_address }}</code>
                                             </div>
                                         </div>
                                         
@@ -372,14 +512,29 @@
                                             <small class="text-muted">{{ equipamento.descricao }}</small>
                                         </div>
                                         {% endif %}
-                                    </div>
-
-                                    <div class="mt-3">
-                                        <a href="{{ url_for('ver_equipamento', dispositivo_id=equipamento.id) }}" 
-                                           class="btn btn-outline-primary btn-sm">
-                                            <i class="fas fa-eye me-1"></i>
-                                            Ver Detalhes
-                                        </a>
+                                        
+                                        <!-- Última comunicação (debug) - opcional, pode remover -->
+                                        {% if equipamento.ultima_comunicacao %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">
+                                                <i class="far fa-clock me-1"></i>
+                                                Última comunicação: 
+                                                {% if equipamento.ultima_comunicacao.strftime %}
+                                                    {{ equipamento.ultima_comunicacao.strftime('%d/%m/%Y %H:%M:%S') }}
+                                                {% else %}
+                                                    {{ equipamento.ultima_comunicacao }}
+                                                {% endif %}
+                                            </small>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <div class="mt-3">
+                                            <a href="{{ url_for('ver_equipamento', dispositivo_id=equipamento.id) }}" 
+                                               class="btn btn-outline-primary btn-sm">
+                                                <i class="fas fa-eye me-1"></i>
+                                                Ver Detalhes
+                                            </a>
+                                        </div>
                                     </div>
                                 </div>
                             {% endfor %}
