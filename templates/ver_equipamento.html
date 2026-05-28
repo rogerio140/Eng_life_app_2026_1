@@ -148,10 +148,29 @@
             box-shadow: 0 10px 20px rgba(46, 139, 87, 0.3);
         }
 
-        .modal-content {
-            border-radius: 15px;
-            border: none;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        .progress-custom {
+            background: #ecf0f1;
+            border-radius: 10px;
+            height: 25px;
+            overflow: hidden;
+        }
+
+        .progress-bar-custom {
+            background: var(--primary-color);
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: width 0.3s ease;
+        }
+
+        .schedule-time {
+            font-family: monospace;
+            font-size: 1rem;
+            font-weight: bold;
         }
 
         .modal-header {
@@ -159,6 +178,10 @@
             color: white;
             border-radius: 15px 15px 0 0;
             border: none;
+        }
+
+        .btn-close-white {
+            filter: brightness(0) invert(1);
         }
 
         @media (max-width: 768px) {
@@ -198,7 +221,7 @@
                 </a>
             </div>
             <div class="nav-item">
-                <a href="#" class="nav-link">
+                <a href="{{ url_for('localizacoes') }}" class="nav-link">
                     <i class="fas fa-map-marker-alt"></i>
                     Localizações
                 </a>
@@ -210,12 +233,23 @@
                 </a>
             </div>
             <div class="nav-item">
-                <a href="#" class="nav-link">
+                <a href="{{ url_for('configuracoes') }}" class="nav-link">
                     <i class="fas fa-cog"></i>
                     Configurações
                 </a>
             </div>
-            <div class="nav-item mt-4">
+            <div class="nav-item mt-4 p-3" style="border-top: 1px solid rgba(255,255,255,0.1);">
+                <div class="text-white">
+                    <small class="d-block">
+                        <i class="fas fa-user me-1"></i>
+                        {{ session.get('usuario_nome', 'Usuário') }}
+                    </small>
+                    <small class="text-white-50 d-block mt-1">
+                        {{ session.get('usuario_tipo', 'usuário')|title }}
+                    </small>
+                </div>
+            </div>
+            <div class="nav-item">
                 <a href="{{ url_for('logout') }}" class="nav-link text-warning">
                     <i class="fas fa-sign-out-alt"></i>
                     Sair do Sistema
@@ -223,12 +257,7 @@
             </div>
         </div>
     </div>
-    {% if dispositivo.tipo_especifico == 'datalogger' %}
-    <a href="{{ url_for('ver_tempo_real', dispositivo_id=dispositivo.id) }}" class="btn btn-success btn-sm">
-        <i class="fas fa-chart-line me-1"></i>
-        Tempo Real
-    </a>
-    {% endif %}
+
     <!-- Main Content -->
     <div class="main-content">
         <!-- Page Header -->
@@ -287,8 +316,8 @@
             <!-- Informações do Equipamento -->
             <div class="col-lg-6 mb-4">
                 <div class="info-card">
-                    <h4 class="mb-4 text-gradient">
-                        <i class="fas fa-info-circle me-2"></i>
+                    <h4 class="mb-4">
+                        <i class="fas fa-info-circle me-2 text-primary"></i>
                         Informações Gerais
                     </h4>
                     
@@ -330,7 +359,11 @@
                         
                         <div class="col-6 mb-3">
                             <strong class="text-muted d-block">Localização</strong>
-                            <span class="fw-bold">{{ dispositivo.localizacao_nome }}</span>
+                            {% if dispositivo.localizacao_nome and dispositivo.localizacao_nome != 'None' %}
+                                <span class="fw-bold">{{ dispositivo.localizacao_nome }}</span>
+                            {% else %}
+                                <span class="text-muted">Localização não definida</span>
+                            {% endif %}
                         </div>
                         
                         <div class="col-6 mb-3">
@@ -373,16 +406,83 @@
                 </div>
             </div>
 
+            <!-- Informações Específicas do Alimentador -->
+            {% if dispositivo.tipo_especifico == 'alimentador' %}
+            <div class="col-lg-6 mb-4">
+                <div class="info-card">
+                    <h4 class="mb-4">
+                        <i class="fas fa-utensils me-2 text-danger"></i>
+                        Informações do Alimentador
+                    </h4>
+                    
+                    <!-- Nível de Ração -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Nível de Ração</label>
+                        {% set percentual = (dispositivo.nivel_racao_atual / dispositivo.capacidade_racao * 100) if dispositivo.capacidade_racao > 0 else 0 %}
+                        <div class="progress-custom">
+                            <div class="progress-bar-custom" style="width: {{ percentual }}%; background: {% if percentual < 20 %}#e74c3c{% elif percentual < 40 %}#f39c12{% else %}#2ecc71{% endif %}">
+                                {{ "%.1f"|format(percentual) }}%
+                            </div>
+                        </div>
+                        <small class="text-muted">{{ "%.0f"|format(dispositivo.nivel_racao_atual or 0) }} / {{ "%.0f"|format(dispositivo.capacidade_racao or 0) }} gramas</small>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <strong class="text-muted d-block">Modo de Operação</strong>
+                            {% if dispositivo.ativa %}
+                                <span class="badge bg-success">Automático</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Manual</span>
+                            {% endif %}
+                        </div>
+                        <div class="col-6 mb-3">
+                            <strong class="text-muted d-block">Vazão Média</strong>
+                            <span>{{ "%.2f"|format(dispositivo.vazao_media or 0) }} g/s</span>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <strong class="text-muted d-block">Horário de Operação</strong>
+                            <span>{{ dispositivo.horario_inicio or '08:00' }} - {{ dispositivo.horario_fim or '18:00' }}</span>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <strong class="text-muted d-block">Porções por Dia</strong>
+                            <span>{{ dispositivo.porcoes_por_dia or 10 }} vezes</span>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <strong class="text-muted d-block">Quantidade por Porção</strong>
+                            <span>{{ "%.1f"|format(dispositivo.quantidade_por_alimentacao or 15) }} g</span>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <strong class="text-muted d-block">Total Diário</strong>
+                            <span>{{ "%.1f"|format(dispositivo.quantidade_total_diaria or 150) }} g</span>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2 mt-3">
+                        <button class="btn btn-primary" onclick="visualizarHorarios()">
+                            <i class="fas fa-calendar-alt me-2"></i>
+                            Ver Horários Agendados
+                        </button>
+                        <a href="{{ url_for('configuracoes_alimentador', equipamento_id=dispositivo.id) }}" 
+                           class="btn btn-outline-primary">
+                            <i class="fas fa-sliders-h me-2"></i>
+                            Configurações Avançadas
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Sensores (apenas para dataloggers) -->
             {% if dispositivo.tipo_especifico == 'datalogger' %}
             <div class="col-lg-6 mb-4">
                 <div class="info-card">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h4 class="text-gradient mb-0">
-                            <i class="fas fa-thermometer-half me-2"></i>
+                        <h4 class="mb-0">
+                            <i class="fas fa-thermometer-half me-2 text-info"></i>
                             Sensores
                         </h4>
-                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSensorModal">
+                        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSensorModal">
                             <i class="fas fa-plus me-2"></i>
                             Adicionar Sensor
                         </button>
@@ -402,7 +502,7 @@
                                     </div>
                                     
                                     <div class="sensor-info">
-                                        <div class="row text-sm">
+                                        <div class="row">
                                             <div class="col-4">
                                                 <small class="text-muted">Tipo</small><br>
                                                 <strong>{{ sensor[2] }}</strong>
@@ -420,7 +520,7 @@
                                         {% if sensor[5] %}
                                         <div class="mt-2">
                                             <small class="text-muted">Endereço:</small><br>
-                                            <code class="text-sm">{{ sensor[5] }}</code>
+                                            <code>{{ sensor[5] }}</code>
                                         </div>
                                         {% endif %}
                                     </div>
@@ -443,6 +543,76 @@
                 </div>
             </div>
             {% endif %}
+        </div>
+
+        <!-- Histórico de Alimentações (apenas para alimentadores) -->
+        {% if dispositivo.tipo_especifico == 'alimentador' and ultimas_alimentacoes %}
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="info-card">
+                    <h4 class="mb-4">
+                        <i class="fas fa-history me-2 text-warning"></i>
+                        Últimas Alimentações
+                    </h4>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Data/Hora</th>
+                                    <th>Quantidade (g)</th>
+                                    <th>Tempo (s)</th>
+                                    <th>Modo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for alm in ultimas_alimentacoes %}
+                                <tr>
+                                    <td>{{ alm[2].strftime('%d/%m/%Y %H:%M:%S') if alm[2] else '-' }}</td>
+                                    <td>{{ "%.2f"|format(alm[0]) }}</td>
+                                    <td>{{ "%.2f"|format(alm[1]) }}</td>
+                                    <td>
+                                        {% if alm[3] == 'automatico' %}
+                                            <span class="badge bg-info">Automático</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">Manual</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Modal de Horários Agendados -->
+    <div class="modal fade" id="horariosModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-calendar-alt me-2"></i>
+                        Horários de Alimentação Agendados
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="modalHorariosList">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Carregando...</span>
+                            </div>
+                            <p class="mt-2">Carregando horários...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -581,6 +751,116 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Função para visualizar horários via API
+        function visualizarHorarios() {
+            const alimentadorId = {{ dispositivo.alimentador_id }};
+            
+            // Mostrar loading no modal
+            const modalBody = document.getElementById('modalHorariosList');
+            modalBody.innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2">Buscando horários agendados...</p>
+                </div>
+            `;
+            
+            // Abrir modal
+            const modal = new bootstrap.Modal(document.getElementById('horariosModal'));
+            modal.show();
+            
+            // Buscar horários da API
+            fetch(`/api/alimentador/${alimentadorId}/horarios`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'sucesso') {
+                        let html = '';
+                        
+                        if (!data.modo_ativa) {
+                            html = `
+                                <div class="alert alert-warning text-center">
+                                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                                    <h5>Modo Manual Ativo</h5>
+                                    <p>O alimentador está em modo manual e não seguirá os horários agendados.</p>
+                                    <hr>
+                                    <div class="text-start">
+                                        <strong>Configurações atuais:</strong><br>
+                                        <i class="fas fa-clock me-1"></i> Horário: ${data.horario_inicio} - ${data.horario_fim}<br>
+                                        <i class="fas fa-chart-line me-1"></i> ${data.porcoes} porções/dia<br>
+                                        <i class="fas fa-weight-hanging me-1"></i> ${data.quantidade_por_porcao} g por porção<br>
+                                        <i class="fas fa-hourglass-half me-1"></i> Intervalo: ${data.intervalo_minutos} minutos
+                                    </div>
+                                </div>
+                            `;
+                        } else if (data.horarios.length === 0) {
+                            html = `
+                                <div class="alert alert-info text-center">
+                                    <i class="fas fa-info-circle fa-2x mb-2"></i>
+                                    <h5>Nenhum horário configurado</h5>
+                                    <p>Verifique as configurações de horário e porções.</p>
+                                </div>
+                            `;
+                        } else {
+                            html = `
+                                <div class="alert alert-success">
+                                    <i class="fas fa-check-circle me-2"></i>
+                                    <strong>Resumo:</strong> ${data.porcoes} alimentações programadas | 
+                                    ${data.quantidade_por_porcao}g por porção | 
+                                    Intervalo de ${data.intervalo_minutos} minutos
+                                    <br>
+                                    <small class="text-muted">
+                                        <i class="fas fa-sun me-1"></i>Início: ${data.horario_inicio} | 
+                                        <i class="fas fa-moon me-1"></i>Término: ${data.horario_fim}
+                                    </small>
+                                </div>
+                                <div class="list-group">
+                            `;
+                            
+                            data.horarios.forEach(h => {
+                                let horaNum = parseInt(h.horario.split(':')[0]);
+                                let periodo = horaNum >= 12 ? 'PM' : 'AM';
+                                let hora12 = horaNum > 12 ? horaNum - 12 : (horaNum === 0 ? 12 : horaNum);
+                                html += `
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <span class="badge bg-primary rounded-pill me-2">#${h.numero}</span>
+                                            <strong class="schedule-time">${h.horario}</strong>
+                                            <small class="text-muted ms-2">(${hora12}:${h.horario.split(':')[1]} ${periodo})</small>
+                                        </div>
+                                        <div>
+                                            <i class="fas fa-weight-hanging me-1 text-success"></i>
+                                            <span class="fw-bold">${h.quantidade} g</span>
+                                        </div>
+                                    </div>
+                                `;
+                            });
+                            html += `</div>`;
+                        }
+                        
+                        modalBody.innerHTML = html;
+                    } else {
+                        modalBody.innerHTML = `
+                            <div class="alert alert-danger text-center">
+                                <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                                <h5>Erro ao carregar horários</h5>
+                                <p>${data.error || 'Tente novamente mais tarde.'}</p>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    modalBody.innerHTML = `
+                        <div class="alert alert-danger text-center">
+                            <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                            <h5>Erro de conexão</h5>
+                            <p>Não foi possível carregar os horários. Verifique sua conexão.</p>
+                        </div>
+                    `;
+                });
+        }
+
         // Configurar modal de exclusão
         const confirmDeleteModal = document.getElementById('confirmDeleteModal');
         const deleteEquipmentForm = document.getElementById('deleteEquipmentForm');
@@ -598,21 +878,16 @@
                 const dispositivoTipo = button.getAttribute('data-dispositivo-tipo');
                 const localizacao = button.getAttribute('data-localizacao');
                 
-                // Atualizar informações no modal
                 deleteEquipmentName.textContent = dispositivoNome;
                 deleteEquipmentType.textContent = dispositivoTipo === 'alimentador' ? 'Alimentador' : 'Datalogger';
-                deleteEquipmentLocation.textContent = localizacao;
+                deleteEquipmentLocation.textContent = localizacao || 'Localização não definida';
                 
-                // Configurar o formulário de exclusão
                 deleteEquipmentForm.action = `/equipamentos/${dispositivoId}/excluir`;
-                
-                // Resetar checkbox e botão
                 confirmDeleteCheckbox.checked = false;
                 confirmDeleteButton.disabled = true;
             });
         }
 
-        // Controlar habilitação do botão de exclusão
         if (confirmDeleteCheckbox) {
             confirmDeleteCheckbox.addEventListener('change', function() {
                 confirmDeleteButton.disabled = !this.checked;

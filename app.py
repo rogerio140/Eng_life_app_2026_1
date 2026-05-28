@@ -646,39 +646,92 @@ def ver_equipamento(dispositivo_id):
     
     try:
         with conn.cursor() as cursor:
+            # CORREÇÃO: Remover colunas que não existem (porcoes_por_dia, quantidade_total_diaria)
             if session['usuario_tipo'] == 'admin':
-                # Admin pode ver qualquer dispositivo
                 cursor.execute("""
-                    SELECT d.*, l.nome as localizacao_nome,
-                           CASE 
-                               WHEN a.id IS NOT NULL THEN 'alimentador'
-                               WHEN dl.id IS NOT NULL THEN 'datalogger'
-                               ELSE 'dispositivo'
-                           END as tipo_especifico,
-                           a.id as alimentador_id,
-                           dl.id as datalogger_id
+                    SELECT 
+                        d.id, 
+                        d.localizacao_id, 
+                        d.nome, 
+                        d.descricao, 
+                        d.mac_address, 
+                        d.ip_address, 
+                        d.tipo, 
+                        d.modelo, 
+                        d.online, 
+                        d.ultima_comunicacao,
+                        d.created_at, 
+                        d.updated_at, 
+                        l.nome as localizacao_nome,
+                        CASE 
+                            WHEN a.id IS NOT NULL THEN 'alimentador'
+                            WHEN dl.id IS NOT NULL THEN 'datalogger'
+                            ELSE 'dispositivo'
+                        END as tipo_especifico,
+                        a.id as alimentador_id,
+                        dl.id as datalogger_id,
+                        a.capacidade_racao,
+                        a.nivel_racao_atual,
+                        a.vazao_media,
+                        ca.ativa,
+                        ca.horario_inicio,
+                        ca.horario_fim,
+                        ca.intervalo_alimentacao,
+                        ca.quantidade_por_alimentacao,
+                        ca.dias_semana,
+                        cal.constante_a,
+                        cal.constante_b,
+                        cal.tempo_acionamento
                     FROM dispositivos d
                     JOIN localizacoes l ON d.localizacao_id = l.id
                     LEFT JOIN alimentadores a ON d.id = a.dispositivo_id
                     LEFT JOIN dataloggers dl ON d.id = dl.dispositivo_id
+                    LEFT JOIN config_alimentadores ca ON a.id = ca.alimentador_id
+                    LEFT JOIN calibracao_alimentadores cal ON a.id = cal.alimentador_id
                     WHERE d.id = %s
                 """, (dispositivo_id,))
             else:
-                # Usuário normal só vê dispositivos das suas localizações
                 cursor.execute("""
-                    SELECT d.*, l.nome as localizacao_nome,
-                           CASE 
-                               WHEN a.id IS NOT NULL THEN 'alimentador'
-                               WHEN dl.id IS NOT NULL THEN 'datalogger'
-                               ELSE 'dispositivo'
-                           END as tipo_especifico,
-                           a.id as alimentador_id,
-                           dl.id as datalogger_id
+                    SELECT 
+                        d.id, 
+                        d.localizacao_id, 
+                        d.nome, 
+                        d.descricao, 
+                        d.mac_address, 
+                        d.ip_address, 
+                        d.tipo, 
+                        d.modelo, 
+                        d.online, 
+                        d.ultima_comunicacao,
+                        d.created_at, 
+                        d.updated_at, 
+                        l.nome as localizacao_nome,
+                        CASE 
+                            WHEN a.id IS NOT NULL THEN 'alimentador'
+                            WHEN dl.id IS NOT NULL THEN 'datalogger'
+                            ELSE 'dispositivo'
+                        END as tipo_especifico,
+                        a.id as alimentador_id,
+                        dl.id as datalogger_id,
+                        a.capacidade_racao,
+                        a.nivel_racao_atual,
+                        a.vazao_media,
+                        ca.ativa,
+                        ca.horario_inicio,
+                        ca.horario_fim,
+                        ca.intervalo_alimentacao,
+                        ca.quantidade_por_alimentacao,
+                        ca.dias_semana,
+                        cal.constante_a,
+                        cal.constante_b,
+                        cal.tempo_acionamento
                     FROM dispositivos d
                     JOIN localizacoes l ON d.localizacao_id = l.id
                     JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
                     LEFT JOIN alimentadores a ON d.id = a.dispositivo_id
                     LEFT JOIN dataloggers dl ON d.id = dl.dispositivo_id
+                    LEFT JOIN config_alimentadores ca ON a.id = ca.alimentador_id
+                    LEFT JOIN calibracao_alimentadores cal ON a.id = cal.alimentador_id
                     WHERE d.id = %s AND ul.usuario_id = %s
                 """, (dispositivo_id, session['usuario_id']))
             
@@ -688,29 +741,74 @@ def ver_equipamento(dispositivo_id):
                 flash('Equipamento não encontrado ou acesso negado.', 'danger')
                 return redirect(url_for('equipamentos'))
             
-            # Resto do código permanece igual...
-            # Converter para dicionário
-            colunas = ['id', 'localizacao_id', 'nome', 'descricao', 'mac_address', 
-                      'ip_address', 'tipo', 'modelo', 'online', 'ultima_comunicacao',
-                      'created_at', 'updated_at', 'localizacao_nome', 'tipo_especifico',
-                      'alimentador_id', 'datalogger_id']
+            # Colunas ajustadas (sem porcoes_por_dia e quantidade_total_diaria)
+            colunas = [
+                'id', 'localizacao_id', 'nome', 'descricao', 'mac_address', 
+                'ip_address', 'tipo', 'modelo', 'online', 'ultima_comunicacao',
+                'created_at', 'updated_at', 'localizacao_nome', 'tipo_especifico',
+                'alimentador_id', 'datalogger_id',
+                'capacidade_racao', 'nivel_racao_atual', 'vazao_media',
+                'ativa', 'horario_inicio', 'horario_fim', 'intervalo_alimentacao',
+                'quantidade_por_alimentacao', 'dias_semana',
+                'constante_a', 'constante_b', 'tempo_acionamento'
+            ]
             
             dispositivo_dict = dict(zip(colunas, dispositivo))
             
+            # Garantir valores padrão
+            if not dispositivo_dict.get('localizacao_nome') or dispositivo_dict.get('localizacao_nome') == 'None':
+                dispositivo_dict['localizacao_nome'] = 'Não definida'
+            
+            # Calcular porcoes_por_dia baseado no intervalo
+            if dispositivo_dict['tipo_especifico'] == 'alimentador':
+                if dispositivo_dict.get('intervalo_alimentacao') and dispositivo_dict.get('horario_inicio') and dispositivo_dict.get('horario_fim'):
+                    try:
+                        from datetime import datetime
+                        inicio = datetime.strptime(dispositivo_dict['horario_inicio'], '%H:%M')
+                        fim = datetime.strptime(dispositivo_dict['horario_fim'], '%H:%M')
+                        minutos_total = (fim - inicio).seconds // 60
+                        if minutos_total < 0:
+                            minutos_total += 24 * 60
+                        intervalo_minutos = dispositivo_dict['intervalo_alimentacao'] // 60
+                        if intervalo_minutos > 0:
+                            dispositivo_dict['porcoes_por_dia'] = (minutos_total // intervalo_minutos) + 1
+                        else:
+                            dispositivo_dict['porcoes_por_dia'] = 10
+                    except:
+                        dispositivo_dict['porcoes_por_dia'] = 10
+                else:
+                    dispositivo_dict['porcoes_por_dia'] = 10
+                
+                # Calcular quantidade_total_diaria
+                dispositivo_dict['quantidade_total_diaria'] = dispositivo_dict.get('quantidade_por_alimentacao', 15) * dispositivo_dict.get('porcoes_por_dia', 10)
+            
             # Buscar sensores se for datalogger
             sensores = []
-            if dispositivo_dict['tipo_especifico'] == 'datalogger':
+            if dispositivo_dict['tipo_especifico'] == 'datalogger' and dispositivo_dict.get('datalogger_id'):
                 cursor.execute("""
                     SELECT id, nome, tipo, unidade, posicao, endereco, ativo
                     FROM sensores 
                     WHERE datalogger_id = %s
                     ORDER BY posicao
                 """, (dispositivo_dict['datalogger_id'],))
-                
                 sensores = cursor.fetchall()
+            
+            # Buscar histórico de alimentações se for alimentador
+            ultimas_alimentacoes = []
+            if dispositivo_dict['tipo_especifico'] == 'alimentador' and dispositivo_dict.get('alimentador_id'):
+                cursor.execute("""
+                    SELECT quantidade_racao, tempo_acionamento, timestamp, modo
+                    FROM historico_alimentacao
+                    WHERE alimentador_id = %s
+                    ORDER BY timestamp DESC
+                    LIMIT 10
+                """, (dispositivo_dict['alimentador_id'],))
+                ultimas_alimentacoes = cursor.fetchall()
             
     except Exception as e:
         print(f"❌ Erro ao buscar equipamento: {e}")
+        import traceback
+        traceback.print_exc()
         flash('Erro ao carregar equipamento.', 'danger')
         return redirect(url_for('equipamentos'))
     finally:
@@ -718,8 +816,107 @@ def ver_equipamento(dispositivo_id):
     
     return render_template('ver_equipamento.html', 
                          dispositivo=dispositivo_dict, 
-                         sensores=sensores)
+                         sensores=sensores,
+                         ultimas_alimentacoes=ultimas_alimentacoes)
 
+@app.route('/api/alimentador/<int:alimentador_id>/horarios', methods=['GET'])
+
+def obter_horarios_alimentador(alimentador_id):
+    """Retorna os horários calculados para o alimentador"""
+    try:
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão'}), 500
+        
+        with conn.cursor() as cursor:
+            # Buscar configurações do alimentador
+            cursor.execute("""
+                SELECT 
+                    ca.ativa,
+                    ca.horario_inicio,
+                    ca.horario_fim,
+                    ca.intervalo_alimentacao,
+                    ca.quantidade_por_alimentacao,
+                    a.capacidade_racao,
+                    a.nivel_racao_atual
+                FROM alimentadores a
+                LEFT JOIN config_alimentadores ca ON a.id = ca.alimentador_id
+                WHERE a.id = %s
+            """, (alimentador_id,))
+            
+            config = cursor.fetchone()
+            
+            if not config:
+                return jsonify({'error': 'Alimentador não encontrado'}), 404
+            
+            ativa = config[0] if config[0] is not None else False
+            horario_inicio = config[1].strftime('%H:%M') if config[1] else '08:00'
+            horario_fim = config[2].strftime('%H:%M') if config[2] else '18:00'
+            intervalo_alimentacao = config[3] if config[3] else 3600
+            quantidade_por_alimentacao = float(config[4]) if config[4] else 15.0
+            capacidade = float(config[5]) if config[5] else 5000
+            nivel_atual = float(config[6]) if config[6] else 0
+            
+            # Calcular número de porções
+            inicio = datetime.strptime(horario_inicio, '%H:%M')
+            fim = datetime.strptime(horario_fim, '%H:%M')
+            minutos_inicio = inicio.hour * 60 + inicio.minute
+            minutos_fim = fim.hour * 60 + fim.minute
+            
+            if minutos_fim < minutos_inicio:
+                minutos_fim += 24 * 60
+            
+            tempo_total = minutos_fim - minutos_inicio
+            intervalo_minutos = intervalo_alimentacao // 60
+            
+            if intervalo_minutos > 0:
+                porcoes = (tempo_total // intervalo_minutos) + 1
+            else:
+                porcoes = 1
+            
+            # Limitar máximo de porções
+            porcoes = min(porcoes, 50)
+            
+            # Gerar lista de horários
+            horarios = []
+            minutos_atual = minutos_inicio
+            
+            for i in range(porcoes):
+                hora = minutos_atual // 60
+                minuto = minutos_atual % 60
+                horario_str = f"{hora:02d}:{minuto:02d}"
+                
+                horarios.append({
+                    'numero': i + 1,
+                    'horario': horario_str,
+                    'quantidade': round(quantidade_por_alimentacao, 2),
+                    'horario_formatado': f"{hora:02d}:{minuto:02d}"
+                })
+                
+                minutos_atual += intervalo_minutos
+            
+            # Calcular percentual de ração
+            percentual = (nivel_atual / capacidade * 100) if capacidade > 0 else 0
+            
+            return jsonify({
+                'status': 'sucesso',
+                'modo_ativa': ativa,
+                'porcoes': porcoes,
+                'quantidade_por_porcao': quantidade_por_alimentacao,
+                'intervalo_minutos': intervalo_minutos,
+                'horarios': horarios,
+                'nivel_percentual': round(percentual, 1),
+                'horario_inicio': horario_inicio,
+                'horario_fim': horario_fim
+            }), 200
+            
+    except Exception as e:
+        print(f"❌ Erro ao obter horários: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route('/equipamentos/<int:dispositivo_id>/adicionar-sensor', methods=['POST'])
 def adicionar_sensor(dispositivo_id):
