@@ -3,14 +3,777 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EngLife - Configurações</title>
+    <title>EngLife - {% block title %}Sistema de Automação{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* Seu CSS aqui */
+        :root {
+            --primary-color: #2E8B57;
+            --primary-dark: #1e6b4a;
+            --secondary-color: #34495e;
+            --accent-color: #27ae60;
+            --light-bg: #f8f9fa;
+            --sidebar-width: 280px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fa;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            height: 100vh;
+            position: fixed;
+            width: var(--sidebar-width);
+            transition: all 0.3s;
+            box-shadow: 3px 0 15px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .sidebar-brand {
+            padding: 2rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-brand .logo-icon {
+            font-size: 2rem;
+            margin-right: 0.5rem;
+        }
+
+        .sidebar-brand h2 {
+            font-weight: 700;
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            margin: 0.5rem 1rem;
+        }
+
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .nav-link i {
+            width: 20px;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .page-header {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border-left: 5px solid var(--accent-color);
+        }
+
+        .user-info {
+            background: var(--light-bg);
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+        }
+
+        /* Cards */
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border: none;
+            transition: transform 0.3s;
+            height: 100%;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card .card-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-card .card-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .card-label {
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        /* Location Cards */
+        .location-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border-left: 4px solid var(--accent-color);
+            transition: all 0.3s;
+            height: 100%;
+        }
+
+        .location-card:hover {
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .location-badge {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+
+        /* Quick Actions */
+        .quick-action {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+            height: 100%;
+        }
+
+        .quick-action:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-3px);
+        }
+
+        .quick-action .action-icon {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        /* ============================================ */
+        /* ASSISTENTE FLUTUANTE - SEMPRE VISÍVEL */
+        /* ============================================ */
+        .assistant-widget {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 380px;
+            height: 550px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .assistant-widget.minimized {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .assistant-widget.minimized .assistant-header,
+        .assistant-widget.minimized .assistant-messages,
+        .assistant-widget.minimized .assistant-input-area,
+        .assistant-widget.minimized .assistant-typing {
+            display: none;
+        }
+
+        .assistant-widget.minimized .assistant-minimized-icon {
+            display: flex;
+        }
+
+        .assistant-minimized-icon {
+            display: none;
+            width: 100%;
+            height: 100%;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 28px;
+        }
+
+        .assistant-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .assistant-header h4 {
+            margin: 0;
+            font-size: 1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .assistant-header .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .assistant-header button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        .assistant-header button:hover {
+            opacity: 1;
+        }
+
+        .assistant-status {
+            font-size: 0.7em;
+            opacity: 0.8;
+            margin-left: 8px;
+        }
+
+        .assistant-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background: #f5f5f5;
+        }
+
+        .assistant-input-area {
+            padding: 15px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .assistant-input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .assistant-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            outline: none;
+            font-size: 0.85em;
+        }
+
+        .assistant-input:focus {
+            border-color: #667eea;
+        }
+
+        .assistant-send {
+            padding: 10px 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .assistant-send:hover {
+            transform: scale(1.05);
+        }
+
+        .assistant-quick {
+            display: flex;
+            gap: 6px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .assistant-quick-btn {
+            padding: 4px 10px;
+            background: #e0e0e0;
+            border: none;
+            border-radius: 15px;
+            font-size: 0.7em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .assistant-quick-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .msg {
+            margin-bottom: 15px;
+            display: flex;
+            animation: fadeInMsg 0.3s ease-in;
+        }
+
+        @keyframes fadeInMsg {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .msg.user {
+            justify-content: flex-end;
+        }
+
+        .msg.bot {
+            justify-content: flex-start;
+        }
+
+        .msg-content {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 18px;
+            font-size: 0.85em;
+            line-height: 1.4;
+        }
+
+        .msg.user .msg-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .msg.bot .msg-content {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .msg.bot .msg-content::before {
+            content: "🤖 ";
+            font-weight: bold;
+        }
+
+        .assistant-typing {
+            display: none;
+            padding: 10px 15px;
+            color: #999;
+            font-size: 0.8em;
+            font-style: italic;
+            border-top: 1px solid #e0e0e0;
+            background: white;
+        }
+
+        .assistant-typing.active {
+            display: block;
+        }
+
+        /* Scrollbar */
+        .assistant-messages::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .assistant-messages::-webkit-scrollbar-track {
+            background: #e0e0e0;
+            border-radius: 10px;
+        }
+
+        .assistant-messages::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            .main-content {
+                margin-left: 0;
+            }
+            .assistant-widget {
+                width: calc(100vw - 40px);
+                right: 20px;
+                bottom: 20px;
+                height: 500px;
+            }
+        }
     </style>
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Todo o HTML completo aqui -->
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-seedling logo-icon"></i>
+                <h2>EngLife</h2>
+            </div>
+            <small class="text-white-50">Sistema Inteligente</small>
+        </div>
+
+        <div class="sidebar-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                    <i class="fas fa-tachometer-alt"></i>
+                    Dashboard
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('localizacoes') }}" class="nav-link {% if request.endpoint == 'localizacoes' %}active{% endif %}">
+                    <i class="fas fa-map-marker-alt"></i>
+                    Localizações
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('equipamentos') }}" class="nav-link {% if request.endpoint == 'equipamentos' %}active{% endif %}">
+                    <i class="fas fa-microchip"></i>
+                    Equipamentos
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('configuracoes') }}" class="nav-link {% if request.endpoint == 'configuracoes' %}active{% endif %}">
+                    <i class="fas fa-sliders-h"></i>
+                    Configurações
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('relatorios') }}" class="nav-link {% if request.endpoint == 'relatorios' %}active{% endif %}">
+                    <i class="fas fa-chart-line"></i>
+                    Relatórios
+                </a>
+            </div>
+
+            <!-- Informações do Usuário -->
+            <div class="nav-item mt-4 p-3" style="border-top: 1px solid rgba(255,255,255,0.1);">
+                <div class="text-white">
+                    <small class="d-block">
+                        <i class="fas fa-user me-1"></i>
+                        {{ session.get('usuario_nome', 'Usuário') }}
+                    </small>
+                    <small class="text-white-50 d-block mt-1">
+                        {{ session.get('usuario_tipo', 'usuário')|title }}
+                    </small>
+                </div>
+            </div>
+
+            <div class="nav-item">
+                <a href="{{ url_for('logout') }}" class="nav-link text-warning">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Sair do Sistema
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1>{% block page_title %}Bem-vindo!{% endblock %}</h1>
+                    <p class="lead text-muted mb-0">{% block page_subtitle %}{% endblock %}</p>
+                </div>
+                <div class="col-md-4">
+                    <div class="user-info">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ session.get('usuario_nome', 'Usuário') }}</strong>
+                                <div class="badge bg-primary mt-1">{{ session.get('usuario_tipo', 'usuário')|title }}</div>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-success">
+                                    <i class="fas fa-circle me-1"></i>
+                                    Sessão Ativa
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show mb-4" role="alert">
+                        <i class="fas fa-{% if category == 'success' %}check-circle{% elif category == 'danger' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Content Block -->
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- ============================================ -->
+    <!-- ASSISTENTE FLUTUANTE - SEMPRE VISÍVEL -->
+    <!-- ============================================ -->
+    <div class="assistant-widget" id="assistantWidget">
+        <div class="assistant-header" id="assistantHeader">
+            <h4>
+                <i class="fas fa-robot"></i>
+                Assistente EngLife
+                <span class="assistant-status" id="assistantStatus">🟢 Online</span>
+            </h4>
+            <div class="header-buttons">
+                <button id="minimizeAssistantBtn" title="Minimizar">
+                    <i class="fas fa-minus"></i>
+                </button>
+                <button id="closeAssistantBtn" title="Fechar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="assistant-minimized-icon" id="assistantMinimizedIcon">
+            <i class="fas fa-robot"></i>
+        </div>
+        
+        <div class="assistant-messages" id="assistantMessages">
+            <div class="msg bot">
+                <div class="msg-content">
+                    Olá! 👋<br><br>
+                    Sou seu assistente virtual do <strong>EngLife</strong>.<br><br>
+                    Posso ajudar com:<br>
+                    • 📡 Listar dispositivos<br>
+                    • 🌡️ Ver temperaturas<br>
+                    • 🍽️ Status dos alimentadores<br>
+                    • ⚠️ Alertas do sistema<br>
+                    • 📊 Estatísticas gerais<br><br>
+                    <strong>Comandos rápidos:</strong><br>
+                    "dispositivos", "sensores", "alimentadores", "alertas", "resumo"
+                </div>
+            </div>
+        </div>
+        
+        <div class="assistant-typing" id="assistantTyping">
+            <i class="fas fa-robot"></i> Assistente está digitando...
+        </div>
+        
+        <div class="assistant-input-area">
+            <div class="assistant-input-group">
+                <input type="text" class="assistant-input" id="assistantInput" 
+                       placeholder="Digite sua pergunta..." 
+                       onkeypress="handleAssistantKeyPress(event)">
+                <button class="assistant-send" onclick="sendAssistantMessage()">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+            <div class="assistant-quick">
+                <button class="assistant-quick-btn" onclick="sendQuickCommand('dispositivos')">
+                    📡 Dispositivos
+                </button>
+                <button class="assistant-quick-btn" onclick="sendQuickCommand('sensores')">
+                    🌡️ Sensores
+                </button>
+                <button class="assistant-quick-btn" onclick="sendQuickCommand('alimentadores')">
+                    🍽️ Alimentadores
+                </button>
+                <button class="assistant-quick-btn" onclick="sendQuickCommand('alertas')">
+                    ⚠️ Alertas
+                </button>
+                <button class="assistant-quick-btn" onclick="sendQuickCommand('resumo')">
+                    📊 Resumo
+                </button>
+                <button class="assistant-quick-btn" onclick="sendQuickCommand('temperatura água')">
+                    🌡️ Temp. Água
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // ============================================
+        // ASSISTENTE FLUTUANTE - FUNCIONALIDADE
+        // ============================================
+        
+        const assistantWidget = document.getElementById('assistantWidget');
+        const minimizeBtn = document.getElementById('minimizeAssistantBtn');
+        const closeBtn = document.getElementById('closeAssistantBtn');
+        const assistantMessages = document.getElementById('assistantMessages');
+        const assistantInput = document.getElementById('assistantInput');
+        const assistantTyping = document.getElementById('assistantTyping');
+        
+        // Minimizar/Restaurar
+        let isMinimized = false;
+        
+        function toggleMinimize() {
+            isMinimized = !isMinimized;
+            if (isMinimized) {
+                assistantWidget.classList.add('minimized');
+            } else {
+                assistantWidget.classList.remove('minimized');
+                setTimeout(() => {
+                    assistantMessages.scrollTop = assistantMessages.scrollHeight;
+                    assistantInput.focus();
+                }, 100);
+            }
+        }
+        
+        minimizeBtn.onclick = toggleMinimize;
+        
+        // Clicar no ícone minimizado para restaurar
+        const minimizedIcon = document.getElementById('assistantMinimizedIcon');
+        minimizedIcon.onclick = () => {
+            if (isMinimized) {
+                toggleMinimize();
+            }
+        };
+        
+        // Fechar assistente (esconder completamente)
+        closeBtn.onclick = () => {
+            assistantWidget.style.display = 'none';
+            // Adicionar botão para reabrir (opcional)
+            const reopenBtn = document.createElement('button');
+            reopenBtn.innerHTML = '<i class="fas fa-robot"></i>';
+            reopenBtn.style.position = 'fixed';
+            reopenBtn.style.bottom = '30px';
+            reopenBtn.style.right = '30px';
+            reopenBtn.style.width = '50px';
+            reopenBtn.style.height = '50px';
+            reopenBtn.style.borderRadius = '50%';
+            reopenBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            reopenBtn.style.color = 'white';
+            reopenBtn.style.border = 'none';
+            reopenBtn.style.cursor = 'pointer';
+            reopenBtn.style.zIndex = '1000';
+            reopenBtn.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+            reopenBtn.onclick = () => {
+                assistantWidget.style.display = 'flex';
+                reopenBtn.remove();
+            };
+            document.body.appendChild(reopenBtn);
+        };
+        
+        function handleAssistantKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendAssistantMessage();
+            }
+        }
+        
+        function sendQuickCommand(cmd) {
+            assistantInput.value = cmd;
+            sendAssistantMessage();
+        }
+        
+        async function sendAssistantMessage() {
+            const message = assistantInput.value.trim();
+            if (!message) return;
+            
+            addAssistantMessage(message, 'user');
+            assistantInput.value = '';
+            
+            assistantTyping.classList.add('active');
+            
+            try {
+                const response = await fetch('/api/assistente/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+                
+                const data = await response.json();
+                assistantTyping.classList.remove('active');
+                addAssistantMessage(data.response, 'bot');
+                
+            } catch (error) {
+                assistantTyping.classList.remove('active');
+                addAssistantMessage('❌ Erro de conexão. Tente novamente.', 'bot');
+            }
+            
+            // Scroll para o final
+            assistantMessages.scrollTop = assistantMessages.scrollHeight;
+        }
+        
+        function addAssistantMessage(text, sender) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `msg ${sender}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'msg-content';
+            
+            // Processar markdown básico
+            let formattedText = text.replace(/\n/g, '<br>');
+            formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            contentDiv.innerHTML = formattedText;
+            
+            msgDiv.appendChild(contentDiv);
+            assistantMessages.appendChild(msgDiv);
+            assistantMessages.scrollTop = assistantMessages.scrollHeight;
+        }
+        
+        // Verificar saúde do sistema periodicamente
+        async function checkSystemHealth() {
+            try {
+                const response = await fetch('/health');
+                const statusDot = document.getElementById('assistantStatus');
+                if (response.ok) {
+                    statusDot.innerHTML = '🟢 Online';
+                } else {
+                    statusDot.innerHTML = '🟡 Conectando...';
+                }
+            } catch (error) {
+                const statusDot = document.getElementById('assistantStatus');
+                statusDot.innerHTML = '🔴 Offline';
+            }
+        }
+        
+        setInterval(checkSystemHealth, 30000);
+        assistantInput.focus();
+    </script>
+    
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

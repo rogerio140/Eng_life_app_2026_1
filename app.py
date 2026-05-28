@@ -9,6 +9,8 @@ from config import Config
 import hashlib
 import secrets
 from datetime import datetime, timedelta  # ← ADICIONE ESTA LINHA!
+# No topo do arquivo, junto com as outras importações
+from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = Config.SECRET_KEY
@@ -368,14 +370,14 @@ def health_check():
 
 @app.before_request
 def check_authentication():
-    """Verifica autenticação para rotas protegidas"""
+    """Verifica autenticação para rotas protegidas
     
     print(f"\n🔍 DEBUG MIDDLEWARE:")
     print(f"  Path: {request.path}")
     print(f"  Method: {request.method}")
     print(f"  Endpoint: {request.endpoint}")
     print(f"  Content-Type: {request.content_type}")
-    
+    """
     # PERMITE TODAS AS ROTAS API SEM AUTENTICAÇÃO
     if request.path.startswith('/api/'):
         print("  ✅ Rota API - acesso permitido")
@@ -3214,35 +3216,6 @@ def receber_dados_simples():
 # MIDDLEWARE - Verificar autenticação
 # ====================
 
-@app.before_request
-def check_authentication():
-    """Verifica autenticação para rotas protegidas"""
-    
-    # DEBUG: Mostrar todas as requisições
-    print(f"\n🔍 BEFORE_REQUEST: {request.method} {request.path}")
-    
-    # LISTA COMPLETA de rotas que NÃO precisam de autenticação
-    public_paths = [
-        '/login',
-        '/logout', 
-        '/health',
-        '/api/',  # Todas as rotas API
-        '/static/'  # Arquivos estáticos
-    ]
-    
-    # Verificar se a rota atual começa com algum dos paths públicos
-    for public_path in public_paths:
-        if request.path.startswith(public_path):
-            print(f"✅ Rota pública: {request.path} - ACESSO PERMITIDO")
-            return  # Permite acesso SEM verificar autenticação
-    
-    # Se chegou aqui, precisa de autenticação
-    if 'usuario_id' not in session:
-        print(f"❌ Não autenticado: {request.path} - REDIRECIONANDO")
-        flash('Por favor, faça login para acessar esta página.', 'warning')
-        return redirect(url_for('login'))
-    
-    print(f"✅ Usuário autenticado: {request.path}")
 
 @app.route('/api/ping', methods=['GET', 'POST'])
 def api_ping():
@@ -3273,9 +3246,9 @@ def api_ping():
 
 @app.route('/api/equipamento/autocadastro', methods=['POST'])
 def autocadastro_equipamento():
-    """Rota para autocadastro completo do ESP32 datalogger"""
+    """Rota para autocadastro completo do ESP32 (datalogger OU alimentador)"""
     print("\n" + "="*60)
-    print("🤖 AUTOCADASTRO DO ESP32 DATALOGGER")
+    print("🤖 AUTOCADASTRO DO ESP32")
     print("="*60)
     
     try:
@@ -3296,7 +3269,7 @@ def autocadastro_equipamento():
         print(f"Dados recebidos: {data}")
         
         # Validar campos obrigatórios
-        campos_obrigatorios = ['identificacao', 'dados_sensores']
+        campos_obrigatorios = ['identificacao']
         for campo in campos_obrigatorios:
             if campo not in data:
                 return jsonify({
@@ -3305,7 +3278,6 @@ def autocadastro_equipamento():
                 }), 400
         
         identificacao = data['identificacao']
-        dados_sensores = data['dados_sensores']
         
         # Validar identificação
         if 'mac' not in identificacao:
@@ -3315,7 +3287,7 @@ def autocadastro_equipamento():
             }), 400
         
         mac_address = identificacao['mac'].strip().upper()
-        nome = identificacao.get('nome', f'ESP32 Datalogger {mac_address[-6:]}')
+        nome = identificacao.get('nome', f'ESP32 {mac_address[-6:]}')
         tipo = identificacao.get('tipo', 'datalogger')
         modelo = identificacao.get('modelo', 'ESP32 DevKit')
         versao_firmware = identificacao.get('versao_firmware', '1.0.0')
@@ -3344,9 +3316,12 @@ def autocadastro_equipamento():
             with conn.cursor() as cursor:
                 # 1. Verificar se o dispositivo já existe
                 cursor.execute("""
-                    SELECT d.id, d.nome, d.localizacao_id, dl.id as datalogger_id
+                    SELECT d.id, d.nome, d.localizacao_id, 
+                           dl.id as datalogger_id,
+                           a.id as alimentador_id
                     FROM dispositivos d
                     LEFT JOIN dataloggers dl ON d.id = dl.dispositivo_id AND d.tipo = 'datalogger'
+                    LEFT JOIN alimentadores a ON d.id = a.dispositivo_id AND d.tipo = 'alimentador'
                     WHERE d.mac_address = %s
                 """, (mac_address,))
                 
@@ -3354,7 +3329,7 @@ def autocadastro_equipamento():
                 
                 if dispositivo_existente:
                     # Equipamento já existe, usar os dados existentes
-                    dispositivo_id, nome_existente, localizacao_id, datalogger_id = dispositivo_existente
+                    dispositivo_id, nome_existente, localizacao_id, datalogger_id, alimentador_id = dispositivo_existente
                     print(f"✅ Equipamento já cadastrado: {nome_existente} (ID: {dispositivo_id})")
                     
                     # Atualizar informações do dispositivo
@@ -3430,18 +3405,20 @@ def autocadastro_equipamento():
                     dispositivo_id = cursor.fetchone()[0]
                     print(f"✅ Novo dispositivo criado: {nome} (ID: {dispositivo_id})")
                     
-                    # 4. Criar datalogger
+                    # ============================================
+                    # 4. LÓGICA ESPECÍFICA PARA DATALOGGER
+                    # ============================================
                     if tipo == 'datalogger':
                         cursor.execute("""
                             INSERT INTO dataloggers (dispositivo_id, quantidade_sensores, intervalo_leitura)
                             VALUES (%s, %s, %s)
                             RETURNING id
-                        """, (dispositivo_id, 3, 60))  # 3 sensores, 60s intervalo
+                        """, (dispositivo_id, 3, 60))
                         
                         datalogger_id = cursor.fetchone()[0]
                         print(f"✅ Datalogger criado: ID {datalogger_id}")
                         
-                        # 5. Criar sensores padrão baseado nas posições esperadas
+                        # Criar sensores padrão
                         sensores_padrao = [
                             ('Sensor Água', 'temperatura', '°C', 'agua', f'DS18B20_{datalogger_id}_agua'),
                             ('Sensor Estufa', 'temperatura', '°C', 'estufa', f'DS18B20_{datalogger_id}_estufa'),
@@ -3458,173 +3435,248 @@ def autocadastro_equipamento():
                             """, (datalogger_id, nome_sensor, tipo_sensor, unidade, posicao, endereco, True))
                         
                         print(f"✅ 3 sensores padrão criados/atualizados")
-                
-                # 6. Processar dados dos sensores
-                print(f"\n📊 PROCESSANDO DADOS DOS SENSORES:")
-                
-                leituras_processadas = 0
-                erros = []
-                
-                # Processar cada sensor
-                for sensor_data in dados_sensores:
-                    try:
-                        # Validar dados do sensor
-                        posicao = sensor_data.get('posicao', '').lower()
-                        valor = sensor_data.get('valor')
-                        timestamp = sensor_data.get('timestamp', datetime.now().isoformat())
                         
-                        if not posicao:
-                            erros.append("Posição do sensor não informada")
-                            continue
+                        # Processar dados dos sensores se enviados
+                        if 'dados_sensores' in data:
+                            processar_dados_sensores(cursor, datalogger_id, localizacao_id, data['dados_sensores'])
+                    
+                    # ============================================
+                    # 5. LÓGICA ESPECÍFICA PARA ALIMENTADOR
+                    # ============================================
+                    elif tipo == 'alimentador':
+                        # Extrair dados de configuração (se fornecidos)
+                        configuracao = data.get('configuracao', {})
+                        dados_operacao = data.get('dados', {})
                         
-                        if valor is None:
-                            erros.append(f"Valor não informado para sensor {posicao}")
-                            continue
+                        # 5.1 Criar alimentador
+                        capacidade_racao = configuracao.get('capacidade_racao', 5000.00)
+                        vazao_media = configuracao.get('vazao_media', 10.00)
+                        nivel_racao_atual = dados_operacao.get('nivel_racao', capacidade_racao)
+                        motor_ligado = dados_operacao.get('motor_ligado', False)
                         
-                        valor_float = float(valor)
-                        
-                        print(f"📡 Sensor {posicao}: {valor_float}°C")
-                        
-                        # Determinar endereço do sensor
-                        endereco = f'DS18B20_{datalogger_id}_{posicao}'
-                        
-                        # Buscar ou criar sensor
                         cursor.execute("""
-                            SELECT id, nome, tipo, unidade, ativo
-                            FROM sensores 
-                            WHERE datalogger_id = %s AND posicao = %s
-                        """, (datalogger_id, posicao))
+                            INSERT INTO alimentadores (
+                                dispositivo_id, capacidade_racao, vazao_media, 
+                                nivel_racao_atual, motor_ligado
+                            ) VALUES (%s, %s, %s, %s, %s)
+                            RETURNING id
+                        """, (dispositivo_id, capacidade_racao, vazao_media, nivel_racao_atual, motor_ligado))
                         
-                        sensor = cursor.fetchone()
+                        alimentador_id = cursor.fetchone()[0]
+                        print(f"✅ Alimentador criado: ID {alimentador_id}")
                         
-                        if not sensor:
-                            # Criar sensor automaticamente
-                            nome_sensor = f"Sensor {posicao.capitalize()}"
-                            tipo_sensor = 'temperatura'
-                            unidade = '°C'
-                            
+                        # 5.2 Criar configuração do alimentador
+                        ativa = configuracao.get('ativa', False)
+                        horario_inicio = configuracao.get('horario_inicio', '08:00:00')
+                        horario_fim = configuracao.get('horario_fim', '18:00:00')
+                        intervalo_alimentacao = configuracao.get('intervalo_alimentacao', 3600)
+                        quantidade_por_alimentacao = configuracao.get('quantidade_por_alimentacao', 15.00)
+                        dias_semana = configuracao.get('dias_semana', '1,2,3,4,5,6,7')
+                        
+                        cursor.execute("""
+                            INSERT INTO config_alimentadores (
+                                alimentador_id, ativa, horario_inicio, horario_fim,
+                                intervalo_alimentacao, quantidade_por_alimentacao, dias_semana
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (alimentador_id) DO UPDATE SET
+                                ativa = EXCLUDED.ativa,
+                                horario_inicio = EXCLUDED.horario_inicio,
+                                horario_fim = EXCLUDED.horario_fim,
+                                intervalo_alimentacao = EXCLUDED.intervalo_alimentacao,
+                                quantidade_por_alimentacao = EXCLUDED.quantidade_por_alimentacao,
+                                dias_semana = EXCLUDED.dias_semana,
+                                updated_at = CURRENT_TIMESTAMP
+                        """, (alimentador_id, ativa, horario_inicio, horario_fim, 
+                              intervalo_alimentacao, quantidade_por_alimentacao, dias_semana))
+                        
+                        print(f"✅ Configuração do alimentador criada")
+                        
+                        # 5.3 Criar calibração do alimentador
+                        constante_a = configuracao.get('constante_a', 0.105)
+                        constante_b = configuracao.get('constante_b', 0.0)
+                        tempo_acionamento = configuracao.get('tempo_acionamento', 1050)
+                        
+                        cursor.execute("""
+                            INSERT INTO calibracao_alimentadores (
+                                alimentador_id, constante_a, constante_b, 
+                                tempo_acionamento, calibrado_em
+                            ) VALUES (%s, %s, %s, %s, %s)
+                            ON CONFLICT (alimentador_id) DO UPDATE SET
+                                constante_a = EXCLUDED.constante_a,
+                                constante_b = EXCLUDED.constante_b,
+                                tempo_acionamento = EXCLUDED.tempo_acionamento,
+                                updated_at = CURRENT_TIMESTAMP
+                        """, (alimentador_id, constante_a, constante_b, tempo_acionamento, datetime.now()))
+                        
+                        print(f"✅ Calibração do alimentador criada")
+                        
+                        # 5.4 Associar a um datalogger da mesma localização (se existir)
+                        cursor.execute("""
+                            SELECT dl.id as datalogger_id, d.id as dispositivo_id
+                            FROM dataloggers dl
+                            JOIN dispositivos d ON dl.dispositivo_id = d.id
+                            WHERE d.localizacao_id = %s AND d.tipo = 'datalogger' AND d.online = true
+                            LIMIT 1
+                        """, (localizacao_id,))
+                        
+                        datalogger_associado = cursor.fetchone()
+                        
+                        if datalogger_associado:
+                            datalogger_id_assoc = datalogger_associado[0]
                             cursor.execute("""
-                                INSERT INTO sensores (datalogger_id, nome, tipo, unidade, posicao, endereco, ativo)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                                RETURNING id
-                            """, (datalogger_id, nome_sensor, tipo_sensor, unidade, posicao, endereco, True))
-                            
-                            sensor_id = cursor.fetchone()[0]
-                            print(f"  ✅ Sensor {posicao} criado (ID: {sensor_id})")
+                                INSERT INTO alimentador_datalogger (alimentador_id, datalogger_id)
+                                VALUES (%s, %s)
+                                ON CONFLICT (alimentador_id) DO UPDATE SET
+                                    datalogger_id = EXCLUDED.datalogger_id
+                            """, (alimentador_id, datalogger_id_assoc))
+                            print(f"✅ Alimentador associado ao datalogger ID: {datalogger_id_assoc}")
                         else:
-                            sensor_id, sensor_nome, sensor_tipo, unidade, ativo = sensor
-                            
-                            if not ativo:
-                                cursor.execute("UPDATE sensores SET ativo = true WHERE id = %s", (sensor_id,))
-                                print(f"  ✅ Sensor {posicao} reativado")
+                            print(f"⚠️ Nenhum datalogger encontrado na localização {localizacao_nome} para associar")
                         
-                        # Converter timestamp
-                        try:
-                            if isinstance(timestamp, str):
-                                if 'T' in timestamp:
-                                    timestamp_dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                                else:
-                                    for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f']:
-                                        try:
-                                            timestamp_dt = datetime.strptime(timestamp, fmt)
-                                            break
-                                        except ValueError:
-                                            continue
+                        # 5.5 Registrar histórico de alimentação se houver dados
+                        if 'historico' in data:
+                            for evento in data['historico']:
+                                quantidade = evento.get('quantidade_racao', 0)
+                                tempo = evento.get('tempo_acionamento', 0)
+                                timestamp_alimentacao = evento.get('timestamp', datetime.now().isoformat())
+                                modo = evento.get('modo', 'automatico')
+                                
+                                try:
+                                    if isinstance(timestamp_alimentacao, str):
+                                        timestamp_dt = datetime.fromisoformat(timestamp_alimentacao.replace('Z', '+00:00'))
                                     else:
                                         timestamp_dt = datetime.now()
-                            else:
-                                timestamp_dt = datetime.now()
-                        except Exception:
-                            timestamp_dt = datetime.now()
+                                    
+                                    cursor.execute("""
+                                        INSERT INTO historico_alimentacao (
+                                            alimentador_id, quantidade_racao, tempo_acionamento, 
+                                            timestamp, modo
+                                        ) VALUES (%s, %s, %s, %s, %s)
+                                    """, (alimentador_id, quantidade, tempo, timestamp_dt, modo))
+                                except Exception as e:
+                                    print(f"⚠️ Erro ao registrar histórico: {e}")
+                            
+                            if len(data['historico']) > 0:
+                                print(f"✅ {len(data['historico'])} eventos de histórico registrados")
                         
-                        # Inserir leitura
-                        cursor.execute("""
-                            INSERT INTO leituras_sensores (sensor_id, valor, timestamp)
-                            VALUES (%s, %s, %s)
-                        """, (sensor_id, valor_float, timestamp_dt))
+                        # 5.6 Verificar nível de ração e gerar alerta se necessário
+                        nivel_percentual = (nivel_racao_atual / capacidade_racao) * 100 if capacidade_racao > 0 else 0
                         
-                        leituras_processadas += 1
+                        if nivel_percentual < 10:
+                            cursor.execute("""
+                                INSERT INTO alertas (
+                                    dispositivo_id, localizacao_id, tipo, severidade, 
+                                    mensagem, timestamp
+                                ) VALUES (%s, %s, %s, %s, %s, %s)
+                            """, (
+                                dispositivo_id, localizacao_id, 'racao', 'alto',
+                                f'Nível de ração CRÍTICO: {nivel_racao_atual:.0f}g ({nivel_percentual:.0f}% da capacidade)',
+                                datetime.now()
+                            ))
+                            print(f"⚠️ Alerta gerado: Nível de ração crítico ({nivel_percentual:.0f}%)")
+                        elif nivel_percentual < 20:
+                            cursor.execute("""
+                                INSERT INTO alertas (
+                                    dispositivo_id, localizacao_id, tipo, severidade, 
+                                    mensagem, timestamp
+                                ) VALUES (%s, %s, %s, %s, %s, %s)
+                            """, (
+                                dispositivo_id, localizacao_id, 'racao', 'medio',
+                                f'Nível de ração BAIXO: {nivel_racao_atual:.0f}g ({nivel_percentual:.0f}% da capacidade)',
+                                datetime.now()
+                            ))
+                            print(f"⚠️ Alerta gerado: Nível de ração baixo ({nivel_percentual:.0f}%)")
                         
-                        # Verificar limites de temperatura
-                        if localizacao_id and posicao in ['agua', 'estufa', 'externa']:
-                            verificar_limites_temperatura_simples(
-                                cursor, 
-                                localizacao_id, 
-                                posicao, 
-                                valor_float, 
-                                f"Sensor {posicao}", 
-                                timestamp_dt
-                            )
-                        
-                    except Exception as e:
-                        print(f"  ❌ Erro no sensor {posicao}: {e}")
-                        erros.append(f"{posicao}: {str(e)}")
-                        continue
+                        # 5.7 Criar limites padrão para temperatura (se não existirem)
+                        sensores_posicoes = ['agua', 'estufa', 'externa']
+                        for posicao in sensores_posicoes:
+                            cursor.execute("""
+                                SELECT 1 FROM limites_temperatura 
+                                WHERE localizacao_id = %s AND tipo_sensor = %s
+                            """, (localizacao_id, posicao))
+                            
+                            if not cursor.fetchone():
+                                if posicao == 'agua':
+                                    maximo, minimo = 30.0, 20.0
+                                elif posicao == 'estufa':
+                                    maximo, minimo = 35.0, 25.0
+                                elif posicao == 'externa':
+                                    maximo, minimo = 40.0, 15.0
+                                else:
+                                    maximo, minimo = 28.0, 22.0
+                                
+                                cursor.execute("""
+                                    INSERT INTO limites_temperatura (localizacao_id, tipo_sensor, maximo, minimo)
+                                    VALUES (%s, %s, %s, %s)
+                                    ON CONFLICT (localizacao_id, tipo_sensor) DO NOTHING
+                                """, (localizacao_id, posicao, maximo, minimo))
                 
-                # 7. Atualizar quantidade de sensores ativos
-                cursor.execute("""
-                    UPDATE dataloggers 
-                    SET quantidade_sensores = (
-                        SELECT COUNT(*) FROM sensores 
-                        WHERE datalogger_id = %s AND ativo = true
-                    )
-                    WHERE id = %s
-                """, (datalogger_id, datalogger_id))
-                
-                # 8. Criar limites de temperatura padrão se não existirem
-                sensores_posicoes = ['agua', 'estufa', 'externa']
-                for posicao in sensores_posicoes:
-                    cursor.execute("""
-                        SELECT 1 FROM limites_temperatura 
-                        WHERE localizacao_id = %s AND tipo_sensor = %s
-                    """, (localizacao_id, posicao))
-                    
-                    if not cursor.fetchone():
-                        # Definir limites padrão baseado na posição
-                        if posicao == 'agua':
-                            maximo, minimo = 30.0, 20.0
-                        elif posicao == 'estufa':
-                            maximo, minimo = 35.0, 25.0
-                        elif posicao == 'externa':
-                            maximo, minimo = 40.0, 15.0
-                        else:
-                            maximo, minimo = 28.0, 22.0
-                        
-                        cursor.execute("""
-                            INSERT INTO limites_temperatura (localizacao_id, tipo_sensor, maximo, minimo)
-                            VALUES (%s, %s, %s, %s)
-                            ON CONFLICT (localizacao_id, tipo_sensor) DO NOTHING
-                        """, (localizacao_id, posicao, maximo, minimo))
-                
-                # 9. Commitar todas as mudanças
+                # 6. Commitar todas as mudanças
                 conn.commit()
                 
+                # 7. Preparar resposta baseada no tipo
+                if tipo == 'datalogger':
+                    resposta = {
+                        'status': 'sucesso',
+                        'mensagem': 'Datalogger autocadastrado com sucesso!',
+                        'equipamento': {
+                            'id': dispositivo_id,
+                            'nome': nome,
+                            'mac': mac_address,
+                            'tipo': tipo,
+                            'localizacao_id': localizacao_id,
+                            'localizacao_nome': localizacao_nome
+                        },
+                        'datalogger_id': datalogger_id if tipo == 'datalogger' else None,
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    
+                    # Adicionar estatísticas de leituras se processadas
+                    if 'dados_sensores' in data:
+                        resposta['leituras_processadas'] = len(data['dados_sensores'])
+                    
+                elif tipo == 'alimentador':
+                    resposta = {
+                        'status': 'sucesso',
+                        'mensagem': 'Alimentador autocadastrado com sucesso!',
+                        'equipamento': {
+                            'id': dispositivo_id,
+                            'nome': nome,
+                            'mac': mac_address,
+                            'tipo': tipo,
+                            'localizacao_id': localizacao_id,
+                            'localizacao_nome': localizacao_nome
+                        },
+                        'alimentador_id': alimentador_id,
+                        'configuracoes': {
+                            'ativa': ativa if 'ativa' in locals() else False,
+                            'intervalo_alimentacao': intervalo_alimentacao if 'intervalo_alimentacao' in locals() else 3600,
+                            'quantidade_por_alimentacao': quantidade_por_alimentacao if 'quantidade_por_alimentacao' in locals() else 15.00
+                        },
+                        'nivel_racao': nivel_racao_atual if 'nivel_racao_atual' in locals() else 0,
+                        'capacidade': capacidade_racao if 'capacidade_racao' in locals() else 0,
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    
+                    # Adicionar aviso se nível baixo
+                    if 'nivel_percentual' in locals() and nivel_percentual < 20:
+                        resposta['alerta'] = f'Nível de ração baixo: {nivel_percentual:.0f}%'
+                else:
+                    resposta = {
+                        'status': 'sucesso',
+                        'mensagem': f'Equipamento tipo "{tipo}" cadastrado com sucesso!',
+                        'equipamento': {
+                            'id': dispositivo_id,
+                            'nome': nome,
+                            'mac': mac_address,
+                            'tipo': tipo,
+                            'localizacao_id': localizacao_id,
+                            'localizacao_nome': localizacao_nome
+                        },
+                        'timestamp': datetime.now().isoformat()
+                    }
+                
                 print(f"\n✅ AUTOCADASTRO CONCLUÍDO COM SUCESSO!")
-                print(f"   Leituras processadas: {leituras_processadas}/{len(dados_sensores)}")
-                print(f"   Erros: {len(erros)}")
-                
-                # 10. Preparar resposta
-                resposta = {
-                    'status': 'sucesso',
-                    'mensagem': 'Autocadastro realizado com sucesso!',
-                    'equipamento': {
-                        'id': dispositivo_id,
-                        'nome': nome,
-                        'mac': mac_address,
-                        'localizacao_id': localizacao_id,
-                        'localizacao_nome': localizacao_nome
-                    },
-                    'datalogger_id': datalogger_id,
-                    'leituras_processadas': leituras_processadas,
-                    'sensores_cadastrados': leituras_processadas,
-                    'timestamp': datetime.now().isoformat()
-                }
-                
-                if erros:
-                    resposta['erros'] = erros
-                    resposta['status'] = 'parcial'
-                    resposta['mensagem'] = f'Autocadastro realizado com {len(erros)} erro(s)'
-                
                 return jsonify(resposta), 200
                 
         except Exception as e:
@@ -3649,6 +3701,85 @@ def autocadastro_equipamento():
             'mensagem': f'Erro ao processar requisição: {str(e)}'
         }), 500
 
+
+def processar_dados_sensores(cursor, datalogger_id, localizacao_id, dados_sensores):
+    """Função auxiliar para processar dados dos sensores"""
+    for sensor_data in dados_sensores:
+        try:
+            posicao = sensor_data.get('posicao', '').lower()
+            valor = sensor_data.get('valor')
+            timestamp = sensor_data.get('timestamp', datetime.now().isoformat())
+            
+            if not posicao or valor is None:
+                continue
+            
+            valor_float = float(valor)
+            
+            # Buscar sensor
+            cursor.execute("""
+                SELECT id, nome, tipo, unidade, ativo
+                FROM sensores 
+                WHERE datalogger_id = %s AND posicao = %s
+            """, (datalogger_id, posicao))
+            
+            sensor = cursor.fetchone()
+            
+            if not sensor:
+                # Criar sensor automaticamente
+                nome_sensor = f"Sensor {posicao.capitalize()}"
+                tipo_sensor = 'temperatura'
+                unidade = '°C'
+                endereco = f'DS18B20_{datalogger_id}_{posicao}'
+                
+                cursor.execute("""
+                    INSERT INTO sensores (datalogger_id, nome, tipo, unidade, posicao, endereco, ativo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (datalogger_id, nome_sensor, tipo_sensor, unidade, posicao, endereco, True))
+                
+                sensor_id = cursor.fetchone()[0]
+                print(f"  ✅ Sensor {posicao} criado (ID: {sensor_id})")
+            else:
+                sensor_id = sensor[0]
+                if not sensor[4]:  # ativo = false
+                    cursor.execute("UPDATE sensores SET ativo = true WHERE id = %s", (sensor_id,))
+                    print(f"  ✅ Sensor {posicao} reativado")
+            
+            # Converter timestamp
+            try:
+                if isinstance(timestamp, str):
+                    if 'T' in timestamp:
+                        timestamp_dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    else:
+                        for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f']:
+                            try:
+                                timestamp_dt = datetime.strptime(timestamp, fmt)
+                                break
+                            except ValueError:
+                                continue
+                        else:
+                            timestamp_dt = datetime.now()
+                else:
+                    timestamp_dt = datetime.now()
+            except Exception:
+                timestamp_dt = datetime.now()
+            
+            # Inserir leitura
+            cursor.execute("""
+                INSERT INTO leituras_sensores (sensor_id, valor, timestamp)
+                VALUES (%s, %s, %s)
+            """, (sensor_id, valor_float, timestamp_dt))
+            
+            # Verificar limites de temperatura
+            if localizacao_id and posicao in ['agua', 'estufa', 'externa']:
+                verificar_limites_temperatura_simples(
+                    cursor, localizacao_id, posicao, valor_float, 
+                    f"Sensor {posicao}", timestamp_dt
+                )
+            
+        except Exception as e:
+            print(f"  ❌ Erro no sensor {sensor_data.get('posicao', 'unknown')}: {e}")
+            continue
 
 def verificar_limites_temperatura_simples(cursor, localizacao_id, sensor_posicao, valor, sensor_nome, timestamp):
     """
@@ -3688,180 +3819,2407 @@ def verificar_limites_temperatura_simples(cursor, localizacao_id, sensor_posicao
     except Exception as e:
         print(f"⚠️ Erro ao verificar limites: {e}")
 
+# Adicione no app.py
 
-# ====================
-# API ESPECÍFICA PARA ESP32 DATALOGGER
-# ====================
+# Adicione após as importações e antes das rotas
 
-@app.route('/api/esp32/dados', methods=['POST'])
-def receber_dados_esp32():
+from functools import wraps
+
+# Decorator para verificar permissões
+def require_permission(permission_level='usuario'):
     """
-    Rota específica para receber dados do ESP32
-    Formato esperado:
-    {
-        "mac": "AA:BB:CC:DD:EE:FF",
-        "timestamp": "2024-01-15 10:30:00",
-        "temperaturas": {
-            "agua": 25.5,
-            "estufa": 28.3,
-            "externa": 22.1
-        }
-    }
+    Decorator para verificar permissões do usuário
+    
+    Args:
+        permission_level: 'usuario' (padrão) ou 'admin'
+    
+    Usage:
+        @require_permission()  # Qualquer usuário logado
+        @require_permission('admin')  # Apenas admin
     """
-    print("\n" + "="*50)
-    print("📥 RECEBENDO DADOS DO ESP32")
-    print("="*50)
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            # Verificar se usuário está logado
+            if 'usuario_id' not in session:
+                if request.is_json:
+                    return jsonify({'error': 'Não autenticado'}), 401
+                flash('Por favor, faça login para acessar esta página.', 'warning')
+                return redirect(url_for('login'))
+            
+            # Verificar nível de permissão
+            if permission_level == 'admin' and session.get('usuario_tipo') != 'admin':
+                if request.is_json:
+                    return jsonify({'error': 'Acesso negado. Apenas administradores.'}), 403
+                flash('Acesso negado. Apenas administradores podem acessar esta página.', 'danger')
+                return redirect(url_for('dashboard'))
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+# Versão simples sem argumentos (para compatibilidade com código existente)
+def login_required(f):
+    """Decorator simples que apenas verifica se usuário está logado"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'usuario_id' not in session:
+            if request.is_json:
+                return jsonify({'error': 'Não autenticado'}), 401
+            flash('Por favor, faça login para acessar esta página.', 'warning')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/api/equipamento/comando', methods=['GET'])
+def obter_comando_equipamento():
+    """Retorna comandos pendentes para o equipamento"""
+    if 'usuario_id' not in session:
+        return jsonify({'error': 'Não autenticado'}), 401
+    
+    mac_address = request.args.get('mac_address', '').strip().upper()
+    
+    conn = db.get_connection()
+    if not conn:
+        return jsonify({'error': 'Erro de conexão'}), 500
+    
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Buscar comandos pendentes para este equipamento
+            cursor.execute("""
+                SELECT comando, parametros, criado_em
+                FROM comandos_pendentes
+                WHERE mac_address = %s AND executado = false
+                ORDER BY criado_em ASC
+                LIMIT 1
+            """, (mac_address,))
+            
+            comando = cursor.fetchone()
+            
+            if comando:
+                # Marcar como executado
+                cursor.execute("""
+                    UPDATE comandos_pendentes 
+                    SET executado = true, executado_em = NOW()
+                    WHERE mac_address = %s AND comando = %s
+                """, (mac_address, comando['comando']))
+                
+                conn.commit()
+                
+                return jsonify({
+                    'comando': comando['comando'],
+                    'peso': comando['parametros'].get('peso', 0) if comando['parametros'] else 0,
+                    'estado': comando['parametros'].get('estado', False) if comando['parametros'] else False
+                })
+            
+            return jsonify({'comando': 'nenhum'})
+            
+    except Exception as e:
+        app.logger.error(f"Erro ao buscar comando: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/equipamento/enviar-comando', methods=['POST'])
+@require_permission()
+def enviar_comando_equipamento():
+    """Envia um comando para um equipamento específico"""
+    data = request.get_json()
+    
+    mac_address = data.get('mac_address', '').strip().upper()
+    comando = data.get('comando')
+    parametros = data.get('parametros', {})
+    
+    if not mac_address or not comando:
+        return jsonify({'error': 'mac_address e comando são obrigatórios'}), 400
+    
+    conn = db.get_connection()
+    if not conn:
+        return jsonify({'error': 'Erro de conexão'}), 500
+    
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO comandos_pendentes (mac_address, comando, parametros, criado_por)
+                VALUES (%s, %s, %s, %s)
+            """, (mac_address, comando, json.dumps(parametros), session['usuario_id']))
+            
+            conn.commit()
+            
+            # Registrar log
+            db.registrar_log(
+                session['usuario_id'],
+                'ENVIAR_COMANDO',
+                f'Comando {comando} enviado para {mac_address}',
+                request.remote_addr,
+                request.user_agent.string
+            )
+            
+            return jsonify({'success': True, 'mensagem': 'Comando enviado com sucesso'})
+            
+    except Exception as e:
+        app.logger.error(f"Erro ao enviar comando: {e}")
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+# ============================================
+# API PARA DATALOGGER (APENAS LEITURA)
+# ============================================
+
+# ============================================
+# ROTAS DA API PARA DATALOGGER - CORRIGIDAS
+# ============================================
+
+@app.route('/api/datalogger/autocadastro', methods=['POST'])
+def autocadastro_datalogger():
+    """
+    Autocadastro de datalogger ESP32
+    """
+    print("\n" + "="*60)
+    print("🌡️ AUTOCADASTRO DATALOGGER")
+    print("="*60)
     
     try:
         # Verificar se é JSON
         if not request.is_json:
-            return jsonify({'erro': 'Content-Type deve ser application/json'}), 400
+            print("❌ Content-Type não é JSON")
+            return jsonify({'error': 'Content-Type deve ser application/json'}), 400
         
-        dados = request.get_json()
-        print(f"Dados recebidos: {dados}")
+        data = request.get_json()
+        print(f"📥 Dados recebidos: {data}")
         
-        # Validar campos obrigatórios
-        if 'mac' not in dados:
-            return jsonify({'erro': 'Campo "mac" é obrigatório'}), 400
+        # Validar campos
+        if 'identificacao' not in data:
+            print("❌ Campo 'identificacao' não encontrado")
+            return jsonify({'error': 'Campo identificacao é obrigatório'}), 400
         
-        mac_address = dados['mac'].strip().upper()
-        timestamp_str = dados.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-        temperaturas = dados.get('temperaturas', {})
+        identificacao = data['identificacao']
         
-        if not temperaturas:
-            return jsonify({'erro': 'Nenhuma temperatura fornecida'}), 400
+        if 'mac' not in identificacao:
+            print("❌ Campo 'mac' não encontrado")
+            return jsonify({'error': 'Campo mac é obrigatório'}), 400
+        
+        mac_address = identificacao['mac'].strip().upper()
+        print(f"🔑 MAC Address: {mac_address}")
         
         conn = db.get_connection()
         if not conn:
-            return jsonify({'erro': 'Erro de conexão com o banco'}), 500
+            print("❌ Erro de conexão com banco")
+            return jsonify({'error': 'Erro de conexão'}), 500
         
         with conn.cursor() as cursor:
-            # 1. Verificar se o dispositivo existe
+            # Verificar se já existe
             cursor.execute("""
-                SELECT d.id, d.nome, dl.id as datalogger_id, d.localizacao_id
+                SELECT d.id, d.nome, d.localizacao_id 
+                FROM dispositivos d
+                WHERE d.mac_address = %s AND d.tipo = 'datalogger'
+            """, (mac_address,))
+            
+            existente = cursor.fetchone()
+            
+            if existente:
+                print(f"✅ Datalogger já existe: ID {existente[0]}")
+                
+                # Atualizar online
+                cursor.execute("""
+                    UPDATE dispositivos 
+                    SET online = true, ultima_comunicacao = %s
+                    WHERE id = %s
+                """, (datetime.now(), existente[0]))
+                conn.commit()
+                
+                return jsonify({
+                    'status': 'sucesso',
+                    'mensagem': 'Datalogger já cadastrado',
+                    'datalogger_id': existente[0]
+                }), 200
+            
+            # Criar localização padrão
+            localizacao_nome = identificacao.get('localizacao', {}).get('nome', 'Localização Padrão')
+            localizacao_tipo = identificacao.get('localizacao', {}).get('tipo', 'estufa')
+            
+            cursor.execute("""
+                INSERT INTO localizacoes (nome, tipo, descricao)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (nome) DO UPDATE SET nome = EXCLUDED.nome
+                RETURNING id
+            """, (localizacao_nome, localizacao_tipo, f'Localização para {mac_address}'))
+            
+            localizacao_id = cursor.fetchone()[0]
+            print(f"📍 Localização ID: {localizacao_id}")
+            
+            # Criar dispositivo
+            nome_equipamento = identificacao.get('nome', f'Datalogger {mac_address[-8:]}')
+            modelo = identificacao.get('modelo', 'ESP32')
+            versao = identificacao.get('versao_firmware', '1.0.0')
+            
+            cursor.execute("""
+                INSERT INTO dispositivos (
+                    localizacao_id, nome, descricao, mac_address,
+                    tipo, modelo, versao_firmware, online, ultima_comunicacao
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                localizacao_id,
+                nome_equipamento,
+                f'Datalogger autocadastrado - MAC: {mac_address}',
+                mac_address,
+                'datalogger',
+                modelo,
+                versao,
+                True,
+                datetime.now()
+            ))
+            
+            dispositivo_id = cursor.fetchone()[0]
+            print(f"✅ Dispositivo criado: ID {dispositivo_id}")
+            
+            # Criar datalogger
+            cursor.execute("""
+                INSERT INTO dataloggers (dispositivo_id, quantidade_sensores, intervalo_leitura)
+                VALUES (%s, %s, %s)
+                RETURNING id
+            """, (dispositivo_id, 3, 60))
+            
+            datalogger_id = cursor.fetchone()[0]
+            print(f"✅ Datalogger criado: ID {datalogger_id}")
+            
+            # Criar sensores
+            sensores_info = identificacao.get('sensores', [])
+            
+            if not sensores_info:
+                # Sensores padrão
+                sensores_padrao = [
+                    ('Sensor Água', 'temperatura', '°C', 'agua', 'DS18B20_agua'),
+                    ('Sensor Estufa', 'temperatura', '°C', 'estufa', 'DS18B20_estufa'),
+                    ('Sensor Externa', 'temperatura', '°C', 'externa', 'DS18B20_externa')
+                ]
+                
+                for nome_sensor, tipo_sensor, unidade, posicao, endereco in sensores_padrao:
+                    cursor.execute("""
+                        INSERT INTO sensores (datalogger_id, nome, tipo, unidade, posicao, endereco, ativo)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (datalogger_id, nome_sensor, tipo_sensor, unidade, posicao, endereco, True))
+            else:
+                for sensor in sensores_info:
+                    cursor.execute("""
+                        INSERT INTO sensores (datalogger_id, nome, tipo, unidade, posicao, endereco, ativo)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        datalogger_id,
+                        sensor.get('nome', 'Sensor'),
+                        sensor.get('tipo', 'temperatura'),
+                        sensor.get('unidade', '°C'),
+                        sensor.get('posicao', 'desconhecido'),
+                        sensor.get('endereco', f'DS18B20_{datalogger_id}'),
+                        True
+                    ))
+            
+            print(f"✅ {len(sensores_info) if sensores_info else 3} sensores criados")
+            
+            # Criar limites padrão
+            limites_padrao = [
+                ('agua', 30.0, 20.0),
+                ('estufa', 35.0, 25.0),
+                ('externa', 40.0, 15.0)
+            ]
+            
+            for tipo_sensor, maximo, minimo in limites_padrao:
+                cursor.execute("""
+                    INSERT INTO limites_temperatura (localizacao_id, tipo_sensor, maximo, minimo)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (localizacao_id, tipo_sensor) DO NOTHING
+                """, (localizacao_id, tipo_sensor, maximo, minimo))
+            
+            conn.commit()
+            
+            print("🎉 Datalogger cadastrado com sucesso!")
+            
+            return jsonify({
+                'status': 'sucesso',
+                'mensagem': 'Datalogger cadastrado com sucesso',
+                'datalogger_id': dispositivo_id
+            }), 201
+            
+    except Exception as e:
+        print(f"❌ Erro no autocadastro: {e}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+
+
+@app.route('/api/datalogger/config', methods=['GET'])
+def get_config_datalogger():
+    """Retorna configurações do datalogger"""
+    mac_address = request.args.get('mac_address', '').strip().upper()
+    
+    if not mac_address:
+        return jsonify({'error': 'mac_address é obrigatório'}), 400
+    
+    conn = db.get_connection()
+    if not conn:
+        return jsonify({'error': 'Erro de conexão'}), 500
+    
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT d.id, d.localizacao_id, dl.intervalo_leitura
                 FROM dispositivos d
                 JOIN dataloggers dl ON d.id = dl.dispositivo_id
                 WHERE d.mac_address = %s AND d.tipo = 'datalogger'
             """, (mac_address,))
             
+            resultado = cursor.fetchone()
+            
+            if not resultado:
+                return jsonify({'error': 'Datalogger não encontrado'}), 404
+            
+            dispositivo_id, localizacao_id, intervalo = resultado
+            
+            # Buscar limites
+            cursor.execute("""
+                SELECT tipo_sensor, maximo, minimo
+                FROM limites_temperatura
+                WHERE localizacao_id = %s
+            """, (localizacao_id,))
+            
+            limites = cursor.fetchall()
+            
+            limites_dict = {}
+            for limite in limites:
+                limites_dict[limite[0]] = {
+                    'max': float(limite[1]),
+                    'min': float(limite[2])
+                }
+            
+            return jsonify({
+                'status': 'sucesso',
+                'config': {
+                    'intervalo_leitura': intervalo,
+                    'limites': limites_dict
+                }
+            }), 200
+            
+    except Exception as e:
+        print(f"❌ Erro: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+# ============================================
+# FUNÇÕES AUXILIARES
+# ============================================
+
+def criar_localizacao(cursor, localizacao_info):
+    """Cria ou obtém localização"""
+    nome = localizacao_info.get('nome', 'Localização Padrão')
+    
+    cursor.execute("SELECT id FROM localizacoes WHERE nome = %s", (nome,))
+    existente = cursor.fetchone()
+    
+    if existente:
+        return existente['id']
+    
+    cursor.execute("""
+        INSERT INTO localizacoes (nome, tipo, descricao)
+        VALUES (%s, %s, %s)
+        RETURNING id
+    """, (
+        nome,
+        localizacao_info.get('tipo', 'estufa'),
+        localizacao_info.get('descricao', '')
+    ))
+    
+    return cursor.fetchone()['id']
+
+def criar_limites_temperatura(cursor, localizacao_id):
+    """Cria limites padrão de temperatura"""
+    limites_padrao = [
+        ('agua', 30.0, 20.0),
+        ('estufa', 35.0, 25.0),
+        ('externa', 40.0, 15.0),
+        ('solo', 30.0, 18.0),
+        ('ar', 28.0, 22.0)
+    ]
+    
+    for tipo, maximo, minimo in limites_padrao:
+        cursor.execute("""
+            INSERT INTO limites_temperatura (localizacao_id, tipo_sensor, maximo, minimo)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (localizacao_id, tipo_sensor) DO NOTHING
+        """, (localizacao_id, tipo, maximo, minimo))
+
+def buscar_config_datalogger(cursor, dispositivo_id):
+    """Busca configurações completas do datalogger"""
+    config = {
+        'intervalo_leitura': 60,
+        'limites': {},
+        'ventilador': {
+            'manual': False,
+            'estado': False
+        }
+    }
+    
+    # Buscar limites
+    cursor.execute("""
+        SELECT lt.tipo_sensor, lt.maximo, lt.minimo
+        FROM limites_temperatura lt
+        JOIN dispositivos d ON d.localizacao_id = lt.localizacao_id
+        WHERE d.id = %s
+    """, (dispositivo_id,))
+    
+    for limite in cursor.fetchall():
+        config['limites'][limite['tipo_sensor']] = {
+            'max': float(limite['maximo']),
+            'min': float(limite['minimo'])
+        }
+    
+    return config
+
+def processar_leitura_sensor(cursor, datalogger_id, dado):
+    """Processa uma leitura de sensor"""
+    sensor_endereco = dado.get('sensor_endereco', '')
+    valor = dado.get('valor')
+    timestamp_str = dado.get('timestamp')
+    
+    if not sensor_endereco or valor is None:
+        return
+    
+    cursor.execute("""
+        SELECT id FROM sensores 
+        WHERE endereco = %s AND datalogger_id = %s
+    """, (sensor_endereco, datalogger_id))
+    
+    sensor = cursor.fetchone()
+    if sensor:
+        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00')) if timestamp_str else datetime.now()
+        cursor.execute("""
+            INSERT INTO leituras_sensores (sensor_id, valor, timestamp)
+            VALUES (%s, %s, %s)
+        """, (sensor['id'], float(valor), timestamp))
+
+
+
+
+
+
+
+
+
+# ============================================
+# ROTAS DA API PARA ALIMENTADOR
+# ============================================
+
+@app.route('/api/equipamento/status', methods=['POST'])
+def atualizar_status_equipamento():
+    """
+    Recebe status do equipamento (heartbeat).
+    O campo 'online' vindo do ESP32 é ignorado.
+    """
+
+    try:
+        if not request.is_json:
+            return jsonify({'error': 'Content-Type deve ser application/json'}), 400
+
+        data = request.get_json()
+        mac_address = data.get('mac', '').strip().upper()
+
+        if not mac_address:
+            return jsonify({'error': 'MAC address é obrigatório'}), 400
+
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão com o banco'}), 500
+
+        try:
+            with conn.cursor() as cursor:
+
+                # =========================
+                # 1) Buscar dispositivo
+                # =========================
+                cursor.execute("""
+                    SELECT d.id, a.id as alimentador_id, a.capacidade_racao, d.online
+                    FROM dispositivos d
+                    JOIN alimentadores a ON d.id = a.dispositivo_id
+                    WHERE d.mac_address = %s AND d.tipo = 'alimentador'
+                """, (mac_address,))
+
+                resultado = cursor.fetchone()
+
+                if not resultado:
+                    return jsonify({'error': 'Alimentador não encontrado'}), 404
+
+                dispositivo_id, alimentador_id, capacidade, estava_online = resultado
+
+                agora = datetime.now()
+
+                # =========================
+                # 2) Atualizar heartbeat
+                # =========================
+                cursor.execute("""
+                    UPDATE dispositivos
+                    SET online = TRUE,
+                        ultima_comunicacao = %s
+                    WHERE id = %s
+                """, (agora, dispositivo_id))
+
+                # =========================
+                # 3) Atualizar dados operacionais
+                # =========================
+                nivel_racao = data.get('nivel_racao')
+                motor_ligado = data.get('motor_ligado')
+
+                if nivel_racao is not None:
+                    cursor.execute("""
+                        UPDATE alimentadores
+                        SET nivel_racao_atual = %s,
+                            motor_ligado = %s
+                        WHERE id = %s
+                    """, (nivel_racao, motor_ligado or False, alimentador_id))
+
+                    # =========================
+                    # 4) Verificar nível de ração
+                    # =========================
+                    percentual = (nivel_racao / capacidade) * 100 if capacidade > 0 else 0
+
+                    # Verificar último alerta similar (evitar spam)
+                    cursor.execute("""
+                        SELECT timestamp FROM alertas
+                        WHERE dispositivo_id = %s
+                          AND tipo = 'racao'
+                        ORDER BY timestamp DESC
+                        LIMIT 1
+                    """, (dispositivo_id,))
+
+                    ultimo_alerta = cursor.fetchone()
+                    gerar_alerta = False
+
+                    if not ultimo_alerta:
+                        gerar_alerta = True
+                    else:
+                        tempo_desde_ultimo = (agora - ultimo_alerta[0]).total_seconds()
+                        if tempo_desde_ultimo > 1800:  # 30 min
+                            gerar_alerta = True
+
+                    if gerar_alerta:
+                        if percentual < 10:
+                            cursor.execute("""
+                                INSERT INTO alertas 
+                                (dispositivo_id, tipo, severidade, mensagem, timestamp)
+                                VALUES (%s, %s, %s, %s, %s)
+                            """, (
+                                dispositivo_id, 'racao', 'critico',
+                                f'Nível de ração CRÍTICO: {nivel_racao:.0f}g ({percentual:.0f}%)',
+                                agora
+                            ))
+
+                        elif percentual < 20:
+                            cursor.execute("""
+                                INSERT INTO alertas 
+                                (dispositivo_id, tipo, severidade, mensagem, timestamp)
+                                VALUES (%s, %s, %s, %s, %s)
+                            """, (
+                                dispositivo_id, 'racao', 'medio',
+                                f'Nível de ração BAIXO: {nivel_racao:.0f}g ({percentual:.0f}%)',
+                                agora
+                            ))
+
+                # =========================
+                # 5) Histórico (opcional mas recomendado)
+                # =========================
+                cursor.execute("""
+                    INSERT INTO historico_status 
+                    (dispositivo_id, nivel_racao, motor_ligado, timestamp)
+                    VALUES (%s, %s, %s, %s)
+                """, (
+                    dispositivo_id,
+                    nivel_racao,
+                    motor_ligado or False,
+                    agora
+                ))
+
+                conn.commit()
+
+                return jsonify({
+                    'status': 'sucesso',
+                    'mensagem': 'Status atualizado com sucesso',
+                    'timestamp': agora.isoformat()
+                }), 200
+
+        except Exception as e:
+            conn.rollback()
+            print(f"❌ Erro interno: {e}")
+            return jsonify({'error': str(e)}), 500
+
+        finally:
+            conn.close()
+
+    except Exception as e:
+        print(f"❌ Erro geral: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/equipamento/config', methods=['GET'])
+def obter_config_equipamento():
+    """
+    Retorna configurações atuais do equipamento
+    Parâmetros: mac_address
+    """
+    try:
+        mac_address = request.args.get('mac_address', '').strip().upper()
+        
+        if not mac_address:
+            return jsonify({'error': 'mac_address é obrigatório'}), 400
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão com o banco'}), 500
+        
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                # Buscar dispositivo e alimentador
+                cursor.execute("""
+                    SELECT d.id, d.nome, d.modelo, d.versao_firmware,
+                           a.id as alimentador_id, a.capacidade_racao, a.vazao_media,
+                           a.nivel_racao_atual
+                    FROM dispositivos d
+                    JOIN alimentadores a ON d.id = a.dispositivo_id
+                    WHERE d.mac_address = %s AND d.tipo = 'alimentador'
+                """, (mac_address,))
+                
+                dispositivo = cursor.fetchone()
+                
+                if not dispositivo:
+                    return jsonify({'error': 'Alimentador não encontrado'}), 404
+                
+                # Buscar configuração
+                cursor.execute("""
+                    SELECT ativa, horario_inicio, horario_fim, 
+                           intervalo_alimentacao, quantidade_por_alimentacao, dias_semana
+                    FROM config_alimentadores
+                    WHERE alimentador_id = %s
+                """, (dispositivo['alimentador_id'],))
+                
+                config = cursor.fetchone()
+                
+                # Buscar calibração
+                cursor.execute("""
+                    SELECT constante_a, constante_b, tempo_acionamento
+                    FROM calibracao_alimentadores
+                    WHERE alimentador_id = %s
+                """, (dispositivo['alimentador_id'],))
+                
+                calibracao = cursor.fetchone()
+                
+                # Buscar comandos pendentes
+                cursor.execute("""
+                    SELECT comando, parametros, id
+                    FROM comandos_pendentes
+                    WHERE mac_address = %s AND executado = false
+                    ORDER BY criado_em ASC
+                """, (mac_address,))
+                
+                comandos_pendentes = cursor.fetchall()
+                
+                # Preparar resposta
+                resposta = {
+                    'status': 'sucesso',
+                    'equipamento': {
+                        'id': dispositivo['id'],
+                        'nome': dispositivo['nome'],
+                        'modelo': dispositivo['modelo'],
+                        'versao_firmware': dispositivo['versao_firmware']
+                    },
+                    'alimentador': {
+                        'id': dispositivo['alimentador_id'],
+                        'capacidade_racao': float(dispositivo['capacidade_racao']),
+                        'vazao_media': float(dispositivo['vazao_media']),
+                        'nivel_racao_atual': float(dispositivo['nivel_racao_atual'])
+                    }
+                }
+                
+                if config:
+                    resposta['configuracao'] = {
+                        'ativa': config['ativa'],
+                        'horario_inicio': config['horario_inicio'].strftime('%H:%M:%S') if config['horario_inicio'] else '08:00:00',
+                        'horario_fim': config['horario_fim'].strftime('%H:%M:%S') if config['horario_fim'] else '18:00:00',
+                        'intervalo_alimentacao': config['intervalo_alimentacao'],
+                        'quantidade_por_alimentacao': float(config['quantidade_por_alimentacao']),
+                        'dias_semana': config['dias_semana']
+                    }
+                
+                if calibracao:
+                    resposta['calibracao'] = {
+                        'constante_a': float(calibracao['constante_a']),
+                        'constante_b': float(calibracao['constante_b']),
+                        'tempo_acionamento': calibracao['tempo_acionamento']
+                    }
+                
+                if comandos_pendentes:
+                    resposta['comandos_pendentes'] = []
+                    for cmd in comandos_pendentes:
+                        resposta['comandos_pendentes'].append({
+                            'id': cmd['id'],
+                            'comando': cmd['comando'],
+                            'parametros': cmd['parametros']
+                        })
+                
+                return jsonify(resposta), 200
+                
+        except Exception as e:
+            print(f"❌ Erro ao buscar configuração: {e}")
+            return jsonify({'error': str(e)}), 500
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"❌ Erro geral: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/equipamento/comando', methods=['POST'])
+def enviar_comando_alimentador():
+    """
+    Envia comando para o alimentador
+    Formato esperado:
+    {
+        "mac_address": "AA:BB:CC:DD:EE:FF",
+        "comando": "alimentar",
+        "parametros": {
+            "peso": 50.0,
+            "tempo": 5.0
+        }
+    }
+    
+    Comandos suportados:
+    - alimentar: Aciona o motor (parâmetros: peso OU tempo)
+    - calibrar: Inicia calibração (parâmetros: tempo1, tempo2)
+    - parar: Para o motor imediatamente
+    - configurar: Atualiza configurações
+    - reset: Reinicia o equipamento
+    """
+    try:
+        if not request.is_json:
+            return jsonify({'error': 'Content-Type deve ser application/json'}), 400
+        
+        data = request.get_json()
+        mac_address = data.get('mac_address', '').strip().upper()
+        comando = data.get('comando', '').lower()
+        parametros = data.get('parametros', {})
+        
+        if not mac_address or not comando:
+            return jsonify({'error': 'mac_address e comando são obrigatórios'}), 400
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão com o banco'}), 500
+        
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                # Verificar se o dispositivo existe
+                cursor.execute("""
+                    SELECT d.id, a.id as alimentador_id
+                    FROM dispositivos d
+                    JOIN alimentadores a ON d.id = a.dispositivo_id
+                    WHERE d.mac_address = %s AND d.tipo = 'alimentador'
+                """, (mac_address,))
+                
+                dispositivo = cursor.fetchone()
+                
+                if not dispositivo:
+                    return jsonify({'error': 'Alimentador não encontrado'}), 404
+                
+                # Validar comando
+                comandos_validos = ['alimentar', 'calibrar', 'parar', 'configurar', 'reset']
+                if comando not in comandos_validos:
+                    return jsonify({'error': f'Comando inválido. Use: {", ".join(comandos_validos)}'}), 400
+                
+                # Processar cada tipo de comando
+                if comando == 'alimentar':
+                    # Verificar parâmetros
+                    peso = parametros.get('peso', 0)
+                    tempo = parametros.get('tempo', 0)
+                    
+                    if peso <= 0 and tempo <= 0:
+                        return jsonify({'error': 'Informe peso (g) ou tempo (s) para alimentar'}), 400
+                    
+                    # Buscar constantes de calibração
+                    cursor.execute("""
+                        SELECT constante_a, constante_b
+                        FROM calibracao_alimentadores
+                        WHERE alimentador_id = %s
+                    """, (dispositivo['alimentador_id'],))
+                    
+                    calibracao = cursor.fetchone()
+                    
+                    if calibracao:
+                        constante_a = float(calibracao['constante_a'])
+                        constante_b = float(calibracao['constante_b'])
+                        
+                        if peso > 0:
+                            tempo_calculado = (peso * constante_a) + constante_b
+                        else:
+                            tempo_calculado = tempo
+                            peso_calculado = (tempo - constante_b) / constante_a if constante_a != 0 else 0
+                    else:
+                        tempo_calculado = tempo if tempo > 0 else 5.0
+                    
+                    # Criar comando pendente
+                    cursor.execute("""
+                        INSERT INTO comandos_pendentes (mac_address, comando, parametros, criado_por)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING id
+                    """, (
+                        mac_address,
+                        'alimentar',
+                        json.dumps({'tempo': tempo_calculado, 'peso': peso}),
+                        session.get('usuario_id')
+                    ))
+                    
+                    comando_id = cursor.fetchone()['id']
+                    
+                    mensagem = f'Comando de alimentação enviado: {tempo_calculado:.2f}s'
+                    if peso > 0:
+                        mensagem += f' ({peso}g)'
+                    
+                elif comando == 'calibrar':
+                    tempo1 = parametros.get('tempo1', 0)
+                    tempo2 = parametros.get('tempo2', 0)
+                    
+                    if tempo1 <= 0 or tempo2 <= 0:
+                        return jsonify({'error': 'Informe tempo1 e tempo2 para calibração'}), 400
+                    
+                    cursor.execute("""
+                        INSERT INTO comandos_pendentes (mac_address, comando, parametros, criado_por)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING id
+                    """, (
+                        mac_address,
+                        'calibrar',
+                        json.dumps({'tempo1': tempo1, 'tempo2': tempo2, 'etapa': 1}),
+                        session.get('usuario_id')
+                    ))
+                    
+                    comando_id = cursor.fetchone()['id']
+                    mensagem = f'Comando de calibração enviado (tempo1={tempo1}s, tempo2={tempo2}s)'
+                    
+                elif comando == 'parar':
+                    cursor.execute("""
+                        INSERT INTO comandos_pendentes (mac_address, comando, parametros, criado_por)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING id
+                    """, (
+                        mac_address,
+                        'parar',
+                        '{}',
+                        session.get('usuario_id')
+                    ))
+                    
+                    comando_id = cursor.fetchone()['id']
+                    mensagem = 'Comando de parada enviado'
+                    
+                elif comando == 'configurar':
+                    # Atualizar configurações diretamente no banco
+                    config = parametros.get('configuracao', {})
+                    
+                    if config:
+                        update_fields = []
+                        values = []
+                        
+                        if 'ativa' in config:
+                            update_fields.append("ativa = %s")
+                            values.append(config['ativa'])
+                        if 'horario_inicio' in config:
+                            update_fields.append("horario_inicio = %s")
+                            values.append(config['horario_inicio'])
+                        if 'horario_fim' in config:
+                            update_fields.append("horario_fim = %s")
+                            values.append(config['horario_fim'])
+                        if 'intervalo_alimentacao' in config:
+                            update_fields.append("intervalo_alimentacao = %s")
+                            values.append(config['intervalo_alimentacao'])
+                        if 'quantidade_por_alimentacao' in config:
+                            update_fields.append("quantidade_por_alimentacao = %s")
+                            values.append(config['quantidade_por_alimentacao'])
+                        if 'dias_semana' in config:
+                            update_fields.append("dias_semana = %s")
+                            values.append(config['dias_semana'])
+                        
+                        if update_fields:
+                            values.append(dispositivo['alimentador_id'])
+                            query = f"""
+                                UPDATE config_alimentadores 
+                                SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+                                WHERE alimentador_id = %s
+                            """
+                            cursor.execute(query, values)
+                    
+                    # Calibração
+                    calib = parametros.get('calibracao', {})
+                    if calib:
+                        update_fields = []
+                        values = []
+                        
+                        if 'constante_a' in calib:
+                            update_fields.append("constante_a = %s")
+                            values.append(calib['constante_a'])
+                        if 'constante_b' in calib:
+                            update_fields.append("constante_b = %s")
+                            values.append(calib['constante_b'])
+                        if 'tempo_acionamento' in calib:
+                            update_fields.append("tempo_acionamento = %s")
+                            values.append(calib['tempo_acionamento'])
+                        
+                        if update_fields:
+                            values.append(dispositivo['alimentador_id'])
+                            query = f"""
+                                UPDATE calibracao_alimentadores 
+                                SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+                                WHERE alimentador_id = %s
+                            """
+                            cursor.execute(query, values)
+                    
+                    # Enviar comando para o ESP32 atualizar
+                    cursor.execute("""
+                        INSERT INTO comandos_pendentes (mac_address, comando, parametros, criado_por)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING id
+                    """, (
+                        mac_address,
+                        'configurar',
+                        json.dumps({'recarregar': True}),
+                        session.get('usuario_id')
+                    ))
+                    
+                    conn.commit()
+                    mensagem = 'Configurações atualizadas com sucesso'
+                    
+                elif comando == 'reset':
+                    cursor.execute("""
+                        INSERT INTO comandos_pendentes (mac_address, comando, parametros, criado_por)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING id
+                    """, (
+                        mac_address,
+                        'reset',
+                        '{}',
+                        session.get('usuario_id')
+                    ))
+                    
+                    comando_id = cursor.fetchone()['id']
+                    mensagem = 'Comando de reset enviado'
+                
+                conn.commit()
+                
+                # Registrar log
+                if 'usuario_id' in session:
+                    db.registrar_log(
+                        session['usuario_id'],
+                        'ENVIAR_COMANDO',
+                        f'Comando {comando} enviado para {mac_address}',
+                        request.remote_addr,
+                        request.user_agent.string
+                    )
+                
+                return jsonify({
+                    'status': 'sucesso',
+                    'mensagem': mensagem,
+                    'comando_id': comando_id if 'comando_id' in locals() else None,
+                    'timestamp': datetime.now().isoformat()
+                }), 200
+                
+        except Exception as e:
+            print(f"❌ Erro ao enviar comando: {e}")
+            conn.rollback()
+            return jsonify({'error': str(e)}), 500
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"❌ Erro geral: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/equipamento/comandos', methods=['GET'])
+def obter_comandos_pendentes():
+    """
+    Retorna comandos pendentes para o equipamento
+    Parâmetros: mac_address
+    """
+    try:
+        mac_address = request.args.get('mac_address', '').strip().upper()
+        
+        if not mac_address:
+            return jsonify({'error': 'mac_address é obrigatório'}), 400
+        
+        print(f"🔍 Buscando comandos para MAC: {mac_address}")
+        
+        conn = db.get_connection()
+        if not conn:
+            print("❌ Erro de conexão com o banco")
+            return jsonify({'error': 'Erro de conexão com o banco'}), 500
+        
+        try:
+            with conn.cursor() as cursor:
+                # Primeiro, verificar se a tabela existe
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_name = 'comandos_pendentes'
+                    )
+                """)
+                tabela_existe = cursor.fetchone()[0]
+                
+                if not tabela_existe:
+                    print("⚠️ Tabela comandos_pendentes não existe")
+                    return jsonify({
+                        'status': 'sucesso',
+                        'comandos': [],
+                        'quantidade': 0,
+                        'mensagem': 'Tabela de comandos não disponível'
+                    }), 200
+                
+                # Buscar comandos pendentes
+                cursor.execute("""
+                    SELECT id, comando, parametros, criado_em
+                    FROM comandos_pendentes
+                    WHERE mac_address = %s AND executado = false
+                    ORDER BY criado_em ASC
+                    LIMIT 10
+                """, (mac_address,))
+                
+                comandos_raw = cursor.fetchall()
+                
+                # Marcar como executados
+                for cmd in comandos_raw:
+                    cursor.execute("""
+                        UPDATE comandos_pendentes 
+                        SET executado = true, executado_em = NOW()
+                        WHERE id = %s
+                    """, (cmd[0],))
+                
+                conn.commit()
+                
+                # Formatar resposta
+                comandos_lista = []
+                for cmd in comandos_raw:
+                    # Parse dos parâmetros JSON
+                    parametros = {}
+                    if cmd[2]:
+                        try:
+                            import json
+                            if isinstance(cmd[2], str):
+                                parametros = json.loads(cmd[2])
+                            else:
+                                parametros = cmd[2]
+                        except:
+                            parametros = {}
+                    
+                    comandos_lista.append({
+                        'id': cmd[0],
+                        'comando': cmd[1],
+                        'parametros': parametros,
+                        'criado_em': cmd[3].isoformat() if cmd[3] else None
+                    })
+                
+                print(f"✅ {len(comandos_lista)} comando(s) encontrado(s)")
+                
+                return jsonify({
+                    'status': 'sucesso',
+                    'comandos': comandos_lista,
+                    'quantidade': len(comandos_lista),
+                    'timestamp': datetime.now().isoformat()
+                }), 200
+                
+        except Exception as e:
+            print(f"❌ Erro ao buscar comandos: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"❌ Erro geral: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/equipamento/historico', methods=['GET'])
+def obter_historico_alimentador():
+    """
+    Retorna histórico de alimentações do equipamento
+    Parâmetros: mac_address, dias (opcional, padrão 7)
+    """
+    try:
+        mac_address = request.args.get('mac_address', '').strip().upper()
+        dias = int(request.args.get('dias', 7))
+        
+        if not mac_address:
+            return jsonify({'error': 'mac_address é obrigatório'}), 400
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão com o banco'}), 500
+        
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                # Buscar alimentador
+                cursor.execute("""
+                    SELECT a.id
+                    FROM dispositivos d
+                    JOIN alimentadores a ON d.id = a.dispositivo_id
+                    WHERE d.mac_address = %s AND d.tipo = 'alimentador'
+                """, (mac_address,))
+                
+                alimentador = cursor.fetchone()
+                
+                if not alimentador:
+                    return jsonify({'error': 'Alimentador não encontrado'}), 404
+                
+                # Buscar histórico dos últimos N dias
+                cursor.execute("""
+                    SELECT id, quantidade_racao, tempo_acionamento, 
+                           timestamp, modo, created_at
+                    FROM historico_alimentacao
+                    WHERE alimentador_id = %s
+                      AND timestamp >= CURRENT_DATE - INTERVAL '%s days'
+                    ORDER BY timestamp DESC
+                    LIMIT 1000
+                """, (alimentador['id'], dias))
+                
+                historico = cursor.fetchall()
+                
+                # Calcular estatísticas
+                cursor.execute("""
+                    SELECT 
+                        COUNT(*) as total_eventos,
+                        SUM(quantidade_racao) as total_racao,
+                        AVG(quantidade_racao) as media_por_alimentacao,
+                        MIN(timestamp) as primeira,
+                        MAX(timestamp) as ultima
+                    FROM historico_alimentacao
+                    WHERE alimentador_id = %s
+                      AND timestamp >= CURRENT_DATE - INTERVAL '%s days'
+                """, (alimentador['id'], dias))
+                
+                estatisticas = cursor.fetchone()
+                
+                # Formatar histórico
+                historico_lista = []
+                for item in historico:
+                    historico_lista.append({
+                        'id': item['id'],
+                        'quantidade_racao': float(item['quantidade_racao']),
+                        'tempo_acionamento': item['tempo_acionamento'],
+                        'timestamp': item['timestamp'].isoformat() if item['timestamp'] else None,
+                        'modo': item['modo']
+                    })
+                
+                return jsonify({
+                    'status': 'sucesso',
+                    'historico': historico_lista,
+                    'estatisticas': {
+                        'total_eventos': estatisticas['total_eventos'] if estatisticas else 0,
+                        'total_racao': float(estatisticas['total_racao']) if estatisticas and estatisticas['total_racao'] else 0,
+                        'media_por_alimentacao': float(estatisticas['media_por_alimentacao']) if estatisticas and estatisticas['media_por_alimentacao'] else 0,
+                        'periodo_inicio': estatisticas['primeira'].isoformat() if estatisticas and estatisticas['primeira'] else None,
+                        'periodo_fim': estatisticas['ultima'].isoformat() if estatisticas and estatisticas['ultima'] else None
+                    },
+                    'dias': dias,
+                    'timestamp': datetime.now().isoformat()
+                }), 200
+                
+        except Exception as e:
+            print(f"❌ Erro ao buscar histórico: {e}")
+            return jsonify({'error': str(e)}), 500
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"❌ Erro geral: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/equipamento/calibracao', methods=['POST'])
+def registrar_calibracao():
+    """
+    Registra os resultados da calibração enviados pelo ESP32
+    Formato esperado:
+    {
+        "mac_address": "AA:BB:CC:DD:EE:FF",
+        "constante_a": 0.105,
+        "constante_b": 0.0,
+        "tempo_acionamento": 1050,
+        "peso1": 100,
+        "peso2": 200,
+        "tempo1": 10.5,
+        "tempo2": 21.0
+    }
+    """
+    try:
+        if not request.is_json:
+            return jsonify({'error': 'Content-Type deve ser application/json'}), 400
+        
+        data = request.get_json()
+        mac_address = data.get('mac_address', '').strip().upper()
+        
+        if not mac_address:
+            return jsonify({'error': 'MAC address é obrigatório'}), 400
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão com o banco'}), 500
+        
+        try:
+            with conn.cursor() as cursor:
+                # Buscar alimentador
+                cursor.execute("""
+                    SELECT a.id
+                    FROM dispositivos d
+                    JOIN alimentadores a ON d.id = a.dispositivo_id
+                    WHERE d.mac_address = %s AND d.tipo = 'alimentador'
+                """, (mac_address,))
+                
+                resultado = cursor.fetchone()
+                
+                if not resultado:
+                    return jsonify({'error': 'Alimentador não encontrado'}), 404
+                
+                alimentador_id = resultado[0]
+                
+                # Atualizar calibração
+                constante_a = data.get('constante_a')
+                constante_b = data.get('constante_b')
+                tempo_acionamento = data.get('tempo_acionamento')
+                
+                update_fields = []
+                values = []
+                
+                if constante_a is not None:
+                    update_fields.append("constante_a = %s")
+                    values.append(constante_a)
+                if constante_b is not None:
+                    update_fields.append("constante_b = %s")
+                    values.append(constante_b)
+                if tempo_acionamento is not None:
+                    update_fields.append("tempo_acionamento = %s")
+                    values.append(tempo_acionamento)
+                
+                if update_fields:
+                    update_fields.append("calibrado_em = %s")
+                    values.append(datetime.now())
+                    values.append(alimentador_id)
+                    
+                    query = f"""
+                        UPDATE calibracao_alimentadores 
+                        SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+                        WHERE alimentador_id = %s
+                    """
+                    cursor.execute(query, values)
+                
+                # Registrar histórico da calibração
+                cursor.execute("""
+                    INSERT INTO logs_sistema (acao, descricao, created_at)
+                    VALUES (%s, %s, %s)
+                """, (
+                    'CALIBRACAO',
+                    f'Calibração realizada para MAC {mac_address}: A={constante_a}, B={constante_b}',
+                    datetime.now()
+                ))
+                
+                conn.commit()
+                
+                return jsonify({
+                    'status': 'sucesso',
+                    'mensagem': 'Calibração registrada com sucesso',
+                    'timestamp': datetime.now().isoformat()
+                }), 200
+                
+        except Exception as e:
+            print(f"❌ Erro ao registrar calibração: {e}")
+            conn.rollback()
+            return jsonify({'error': str(e)}), 500
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        print(f"❌ Erro geral: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+
+
+# ============================================
+# SISTEMA DE HEARTBEAT E DETECÇÃO DE OFFLINE
+# ============================================
+
+@app.route('/api/equipamento/heartbeat', methods=['POST'])
+def heartbeat_equipamento():
+    """
+    Recebe heartbeat do equipamento para manter status online
+    """
+    print("\n💓 HEARTBEAT RECEBIDO")
+    
+    try:
+        if not request.is_json:
+            return jsonify({'error': 'Content-Type deve ser application/json'}), 400
+        
+        data = request.get_json()
+        mac_address = data.get('mac', '').strip().upper()
+        
+        if not mac_address:
+            # Tentar pegar de outra chave
+            mac_address = data.get('mac_address', '').strip().upper()
+        
+        if not mac_address:
+            return jsonify({'error': 'MAC address é obrigatório'}), 400
+        
+        print(f"   MAC: {mac_address}")
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão'}), 500
+        
+        with conn.cursor() as cursor:
+            # Verificar se o dispositivo existe
+            cursor.execute("""
+                SELECT id, tipo FROM dispositivos 
+                WHERE mac_address = %s
+            """, (mac_address,))
+            
             dispositivo = cursor.fetchone()
             
             if not dispositivo:
-                # Criar dispositivo automaticamente
-                print(f"⚠️ Dispositivo não encontrado. Criando automaticamente...")
-                
-                # Criar localização padrão
+                print(f"   ❌ Equipamento não encontrado: {mac_address}")
+                return jsonify({'error': 'Equipamento não encontrado'}), 404
+            
+            dispositivo_id, tipo = dispositivo
+            agora = datetime.now()
+            
+            print(f"   ✅ Equipamento encontrado: ID {dispositivo_id}, Tipo: {tipo}")
+            
+            # Atualizar online e última comunicação
+            cursor.execute("""
+                UPDATE dispositivos 
+                SET online = true, ultima_comunicacao = %s
+                WHERE id = %s
+            """, (agora, dispositivo_id))
+            
+            conn.commit()
+            
+            print(f"   ✅ Status atualizado: online=true, ultima_comunicacao={agora}")
+            
+            return jsonify({
+                'status': 'sucesso',
+                'mensagem': 'Heartbeat registrado',
+                'timestamp': agora.isoformat()
+            }), 200
+            
+    except Exception as e:
+        print(f"❌ Erro no heartbeat: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/equipamento/status/<int:equipamento_id>', methods=['GET'])
+@login_required
+def obter_status_equipamento_id(equipamento_id):
+    """Retorna o status atual de um equipamento"""
+    try:
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão'}), 500
+        
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT d.id, d.nome, d.tipo, d.online, d.ultima_comunicacao,
+                       EXTRACT(EPOCH FROM (NOW() - d.ultima_comunicacao)) as segundos_desde_ultima
+                FROM dispositivos d
+                WHERE d.id = %s
+            """, (equipamento_id,))
+            
+            row = cursor.fetchone()
+            
+            if not row:
+                return jsonify({'error': 'Equipamento não encontrado'}), 404
+            
+            segundos_offline = row[5] if row[5] else None
+            
+            # Se passou mais de 2 minutos sem comunicação, considerar offline
+            if segundos_offline and segundos_offline > 120:
+                # Atualizar para offline
                 cursor.execute("""
-                    INSERT INTO localizacoes (nome, tipo, descricao)
-                    VALUES (%s, %s, %s)
-                    RETURNING id
-                """, (f"Local_{mac_address[-6:]}", "estufa", "Localização automática"))
-                
-                localizacao_id = cursor.fetchone()[0]
-                
-                # Criar dispositivo
-                cursor.execute("""
-                    INSERT INTO dispositivos (localizacao_id, nome, mac_address, tipo, online, ultima_comunicacao)
-                    VALUES (%s, %s, %s, %s, true, %s)
-                    RETURNING id
-                """, (localizacao_id, f"ESP32_{mac_address[-6:]}", mac_address, 'datalogger', datetime.now()))
-                
-                dispositivo_id = cursor.fetchone()[0]
-                
-                # Criar datalogger
-                cursor.execute("""
-                    INSERT INTO dataloggers (dispositivo_id, quantidade_sensores, intervalo_leitura)
-                    VALUES (%s, %s, %s)
-                    RETURNING id
-                """, (dispositivo_id, 3, 60))
-                
-                datalogger_id = cursor.fetchone()[0]
-                
-                # Criar sensores
-                sensores = [
-                    ('Sensor Água', 'agua', 'DS18B20_agua'),
-                    ('Sensor Estufa', 'estufa', 'DS18B20_estufa'),
-                    ('Sensor Externa', 'externa', 'DS18B20_externa')
-                ]
-                
-                for nome, posicao, endereco in sensores:
-                    cursor.execute("""
-                        INSERT INTO sensores (datalogger_id, nome, tipo, unidade, posicao, endereco, ativo)
-                        VALUES (%s, %s, 'temperatura', '°C', %s, %s, true)
-                    """, (datalogger_id, nome, posicao, endereco))
-                
+                    UPDATE dispositivos SET online = false WHERE id = %s
+                """, (equipamento_id,))
                 conn.commit()
-                print(f"✅ Dispositivo criado: ID {dispositivo_id}")
-                
+                online = False
             else:
-                dispositivo_id, nome, datalogger_id, localizacao_id = dispositivo
-                print(f"✅ Dispositivo encontrado: {nome} (ID: {dispositivo_id})")
-                
-                # Atualizar última comunicação
+                online = row[3]
+            
+            return jsonify({
+                'status': 'sucesso',
+                'equipamento': {
+                    'id': row[0],
+                    'nome': row[1],
+                    'tipo': row[2],
+                    'online': online,
+                    'ultima_comunicacao': row[4].isoformat() if row[4] else None,
+                    'segundos_offline': int(segundos_offline) if segundos_offline else 0
+                }
+            }), 200
+            
+    except Exception as e:
+        print(f"❌ Erro: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/equipamento/verificar-offline', methods=['GET'])
+def verificar_equipamentos_offline():
+    """
+    Verifica equipamentos que não enviaram heartbeat nos últimos X segundos
+    (Pode ser chamado por um scheduler ou cron job)
+    """
+    try:
+        # Tempo limite para considerar offline (padrão: 2 minutos)
+        timeout_minutos = int(request.args.get('timeout', 2))
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão'}), 500
+        
+        try:
+            with conn.cursor() as cursor:
+                # Buscar equipamentos que deveriam estar online mas não respondem
                 cursor.execute("""
                     UPDATE dispositivos 
-                    SET online = true, ultima_comunicacao = %s
-                    WHERE id = %s
-                """, (datetime.now(), dispositivo_id))
+                    SET online = false
+                    WHERE online = true 
+                      AND ultima_comunicacao < NOW() - INTERVAL '%s minutes'
+                    RETURNING id, mac_address, nome
+                """, (timeout_minutos,))
+                
+                equipamentos_offline = cursor.fetchall()
+                
+                conn.commit()
+                
+                # Gerar alertas para equipamentos que ficaram offline
+                alertas_gerados = []
+                for eq in equipamentos_offline:
+                    eq_id, mac, nome = eq
+                    
+                    # Verificar se já existe alerta recente para este equipamento
+                    cursor.execute("""
+                        SELECT id FROM alertas 
+                        WHERE dispositivo_id = %s 
+                          AND tipo = 'comunicacao'
+                          AND resolvido = false
+                          AND timestamp > NOW() - INTERVAL '1 hour'
+                    """, (eq_id,))
+                    
+                    alerta_existente = cursor.fetchone()
+                    
+                    if not alerta_existente:
+                        # Criar alerta de comunicação
+                        cursor.execute("""
+                            INSERT INTO alertas (dispositivo_id, tipo, severidade, mensagem, timestamp)
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, (
+                            eq_id, 'comunicacao', 'alto',
+                            f'Equipamento {nome} ({mac}) está OFFLINE. Última comunicação há mais de {timeout_minutos} minutos.',
+                            datetime.now()
+                        ))
+                        alertas_gerados.append(mac)
+                
+                conn.commit()
+                
+                return jsonify({
+                    'status': 'sucesso',
+                    'equipamentos_offline': len(equipamentos_offline),
+                    'alertas_gerados': alertas_gerados,
+                    'timestamp': datetime.now().isoformat()
+                }), 200
+                
+        except Exception as e:
+            print(f"❌ Erro ao verificar offline: {e}")
+            return jsonify({'error': str(e)}), 500
+        finally:
+            conn.close()
             
-            # 2. Processar cada temperatura
-            leituras_processadas = 0
-            timestamp = None
+    except Exception as e:
+        print(f"❌ Erro geral: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# Função para ser chamada periodicamente (usando APScheduler)
+# Instale: pip install apscheduler
+
+from apscheduler.schedulers.background import BackgroundScheduler
+def verificar_equipamentos_offline_auto():
+    """Versão automática que verifica equipamentos offline"""
+    try:
+        timeout_minutos = 2  # 2 minutos sem heartbeat = offline
+        
+        conn = db.get_connection()
+        if not conn:
+            return
+        
+        try:
+            with conn.cursor() as cursor:
+                # Buscar equipamentos que deveriam estar online mas não respondem
+                cursor.execute("""
+                    UPDATE dispositivos 
+                    SET online = false
+                    WHERE online = true 
+                      AND ultima_comunicacao < NOW() - INTERVAL '%s minutes'
+                    RETURNING id, mac_address, nome, tipo
+                """, (timeout_minutos,))
+                
+                equipamentos_offline = cursor.fetchall()
+                
+                if equipamentos_offline:
+                    print(f"🔴 {len(equipamentos_offline)} equipamento(s) ficaram offline:")
+                    for eq in equipamentos_offline:
+                        print(f"   - {eq[2]} ({eq[3]}) - MAC: {eq[1]}")
+                    
+                    conn.commit()
+                
+        except Exception as e:
+            print(f"❌ Erro no verificador automático: {e}")
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"❌ Erro geral no verificador: {e}")
+
+# Iniciar verificador em background (adicione no final do arquivo, antes do if __name__)
+def iniciar_verificador_offline():
+    """Inicia o scheduler para verificar equipamentos offline"""
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(func=verificar_equipamentos_offline_auto, trigger="interval", seconds=60)
+        scheduler.start()
+        print("✅ Verificador de equipamentos offline iniciado (a cada 60 segundos)")
+    except ImportError:
+        print("⚠️ APScheduler não instalado. Instale com: pip install apscheduler")
+    except Exception as e:
+        print(f"⚠️ Erro ao iniciar verificador: {e}")
+
+# Adicione esta rota para consultar status de um equipamento específico
+@app.route('/api/equipamento/status/<mac_address>', methods=['GET'])
+def obter_status_equipamento(mac_address):
+    """Retorna o status atual de um equipamento"""
+    try:
+        mac_address = mac_address.strip().upper()
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão'}), 500
+        
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute("""
+                    SELECT d.id, d.nome, d.tipo, d.online, d.ultima_comunicacao,
+                           EXTRACT(EPOCH FROM (NOW() - d.ultima_comunicacao)) as segundos_desde_ultima_comunicacao
+                    FROM dispositivos d
+                    WHERE d.mac_address = %s
+                """, (mac_address,))
+                
+                dispositivo = cursor.fetchone()
+                
+                if not dispositivo:
+                    return jsonify({'error': 'Equipamento não encontrado'}), 404
+                
+                # Calcular status
+                segundos_offline = dispositivo['segundos_desde_ultima_comunicacao'] if dispositivo['segundos_desde_ultima_comunicacao'] else None
+                
+                return jsonify({
+                    'status': 'sucesso',
+                    'equipamento': {
+                        'id': dispositivo['id'],
+                        'nome': dispositivo['nome'],
+                        'tipo': dispositivo['tipo'],
+                        'online': dispositivo['online'],
+                        'ultima_comunicacao': dispositivo['ultima_comunicacao'].isoformat() if dispositivo['ultima_comunicacao'] else None,
+                        'segundos_offline': int(segundos_offline) if segundos_offline else 0
+                    }
+                }), 200
+                
+        except Exception as e:
+            print(f"❌ Erro ao buscar status: {e}")
+            return jsonify({'error': str(e)}), 500
+        finally:
+            conn.close()
             
-            # Converter timestamp
-            try:
-                if isinstance(timestamp_str, str):
-                    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+    except Exception as e:
+        print(f"❌ Erro geral: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================
+# ROTAS DE CONFIGURAÇÕES
+# ============================================
+
+@app.route('/configuracoes')
+@app.route('/configuracoes/')
+@login_required
+def configuracoes():
+    """Página principal de configurações - lista equipamentos"""
+    try:
+        conn = db.get_connection()
+        if not conn:
+            flash('Erro de conexão com o banco de dados', 'danger')
+            return render_template('configuracoes.html', alimentadores=[], dataloggers=[])
+        
+        with conn.cursor() as cursor:
+            # ============================================
+            # DEBUG: Verificar quantos dataloggers existem
+            # ============================================
+            cursor.execute("SELECT COUNT(*) FROM dispositivos WHERE tipo = 'datalogger'")
+            count_dataloggers = cursor.fetchone()[0]
+            print(f"🔍 Total de dataloggers na tabela dispositivos: {count_dataloggers}")
+            
+            # ============================================
+            # 1. BUSCAR ALIMENTADORES
+            # ============================================
+            if session['usuario_tipo'] == 'admin':
+                cursor.execute("""
+                    SELECT 
+                        d.id, d.nome, d.mac_address, d.online, d.ultima_comunicacao,
+                        l.nome as localizacao_nome,
+                        a.capacidade_racao, a.nivel_racao_atual,
+                        ca.ativa, ca.porcoes_por_dia
+                    FROM dispositivos d
+                    JOIN alimentadores a ON d.id = a.dispositivo_id
+                    LEFT JOIN localizacoes l ON d.localizacao_id = l.id
+                    LEFT JOIN config_alimentadores ca ON a.id = ca.alimentador_id
+                    WHERE d.tipo = 'alimentador'
+                    ORDER BY d.nome
+                """)
+            else:
+                cursor.execute("""
+                    SELECT 
+                        d.id, d.nome, d.mac_address, d.online, d.ultima_comunicacao,
+                        l.nome as localizacao_nome,
+                        a.capacidade_racao, a.nivel_racao_atual,
+                        ca.ativa, ca.porcoes_por_dia
+                    FROM dispositivos d
+                    JOIN alimentadores a ON d.id = a.dispositivo_id
+                    LEFT JOIN localizacoes l ON d.localizacao_id = l.id
+                    LEFT JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
+                    LEFT JOIN config_alimentadores ca ON a.id = ca.alimentador_id
+                    WHERE d.tipo = 'alimentador' AND ul.usuario_id = %s
+                    ORDER BY d.nome
+                """, (session['usuario_id'],))
+            
+            alimentadores_raw = cursor.fetchall()
+            
+            # Converter para lista de dicionários
+            alimentadores = []
+            colunas_alimentadores = ['id', 'nome', 'mac_address', 'online', 'ultima_comunicacao',
+                                     'localizacao_nome', 'capacidade_racao', 'nivel_racao_atual',
+                                     'ativa', 'porcoes_por_dia']
+            
+            for row in alimentadores_raw:
+                alm = dict(zip(colunas_alimentadores, row))
+                if alm['capacidade_racao']:
+                    alm['capacidade_racao'] = float(alm['capacidade_racao'])
+                if alm['nivel_racao_atual']:
+                    alm['nivel_racao_atual'] = float(alm['nivel_racao_atual'])
+                alimentadores.append(alm)
+            
+            print(f"✅ Alimentadores encontrados: {len(alimentadores)}")
+            
+            # ============================================
+            # 2. BUSCAR DATALOGGERS - VERSÃO CORRIGIDA
+            # ============================================
+            # Primeiro, buscar todos os dispositivos do tipo datalogger
+            if session['usuario_tipo'] == 'admin':
+                cursor.execute("""
+                    SELECT 
+                        d.id, d.nome, d.mac_address, d.online, d.ultima_comunicacao,
+                        d.descricao, d.modelo,
+                        l.id as localizacao_id, l.nome as localizacao_nome,
+                        dl.intervalo_leitura, dl.quantidade_sensores
+                    FROM dispositivos d
+                    LEFT JOIN localizacoes l ON d.localizacao_id = l.id
+                    LEFT JOIN dataloggers dl ON d.id = dl.dispositivo_id
+                    WHERE d.tipo = 'datalogger'
+                    ORDER BY d.nome
+                """)
+            else:
+                cursor.execute("""
+                    SELECT 
+                        d.id, d.nome, d.mac_address, d.online, d.ultima_comunicacao,
+                        d.descricao, d.modelo,
+                        l.id as localizacao_id, l.nome as localizacao_nome,
+                        dl.intervalo_leitura, dl.quantidade_sensores
+                    FROM dispositivos d
+                    LEFT JOIN localizacoes l ON d.localizacao_id = l.id
+                    LEFT JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
+                    LEFT JOIN dataloggers dl ON d.id = dl.dispositivo_id
+                    WHERE d.tipo = 'datalogger' AND ul.usuario_id = %s
+                    ORDER BY d.nome
+                """, (session['usuario_id'],))
+            
+            dataloggers_raw = cursor.fetchall()
+            print(f"🔍 Dataloggers raw encontrados: {len(dataloggers_raw)}")
+            
+            # Converter para lista de dicionários
+            colunas_dataloggers = ['id', 'nome', 'mac_address', 'online', 'ultima_comunicacao',
+                                   'descricao', 'modelo', 'localizacao_id', 'localizacao_nome',
+                                   'intervalo_leitura', 'quantidade_sensores']
+            
+            dataloggers = []
+            for row in dataloggers_raw:
+                dg = dict(zip(colunas_dataloggers, row))
+                print(f"  - Processando datalogger: {dg.get('nome')} (ID: {dg.get('id')})")
+                
+                # Buscar últimos valores dos sensores
+                if dg.get('id'):
+                    cursor.execute("""
+                        SELECT s.posicao, ls.valor, ls.timestamp
+                        FROM leituras_sensores ls
+                        JOIN sensores s ON ls.sensor_id = s.id
+                        JOIN dataloggers dl ON s.datalogger_id = dl.id
+                        WHERE dl.dispositivo_id = %s
+                        ORDER BY ls.timestamp DESC
+                        LIMIT 3
+                    """, (dg['id'],))
+                    
+                    sensores_raw = cursor.fetchall()
+                    sensores = []
+                    dg['ultima_leitura'] = None
+                    
+                    for s in sensores_raw:
+                        sensores.append({
+                            'posicao': s[0],
+                            'ultima_leitura': float(s[1]) if s[1] else None
+                        })
+                        if not dg['ultima_leitura'] and s[2]:
+                            if hasattr(s[2], 'strftime'):
+                                dg['ultima_leitura'] = s[2].strftime('%d/%m/%Y %H:%M:%S')
+                            else:
+                                dg['ultima_leitura'] = str(s[2])
+                    
+                    dg['sensores'] = sensores
+                    
+                    # Contar total de leituras
+                    cursor.execute("""
+                        SELECT COUNT(*) as total
+                        FROM leituras_sensores ls
+                        JOIN sensores s ON ls.sensor_id = s.id
+                        JOIN dataloggers dl ON s.datalogger_id = dl.id
+                        WHERE dl.dispositivo_id = %s
+                    """, (dg['id'],))
+                    
+                    total_row = cursor.fetchone()
+                    dg['total_leituras'] = total_row[0] if total_row else 0
                 else:
-                    timestamp = datetime.now()
-            except:
-                timestamp = datetime.now()
+                    dg['sensores'] = []
+                    dg['total_leituras'] = 0
+                
+                dataloggers.append(dg)
             
-            # Mapeamento das posições
-            mapeamento = {
-                'agua': 'agua',
-                'estufa': 'estufa', 
-                'externa': 'externa'
+            print(f"✅ Dataloggers processados: {len(dataloggers)}")
+        
+        conn.close()
+        
+        return render_template('configuracoes.html', 
+                             alimentadores=alimentadores,
+                             dataloggers=dataloggers,
+                             usuario=session)
+                             
+    except Exception as e:
+        print(f"❌ Erro na rota configuracoes: {e}")
+        import traceback
+        traceback.print_exc()
+        flash(f'Erro ao carregar configurações: {str(e)}', 'danger')
+        return render_template('configuracoes.html', alimentadores=[], dataloggers=[])
+
+
+@app.route('/configuracoes/alimentador/<int:equipamento_id>')
+@login_required
+def configuracoes_alimentador(equipamento_id):
+    """Página de configurações específica do alimentador"""
+    conn = db.get_connection()
+    if not conn:
+        flash('Erro de conexão com o banco de dados', 'danger')
+        return redirect(url_for('configuracoes'))
+    
+    try:
+        with conn.cursor() as cursor:
+            # Verificar permissão
+            if session['usuario_tipo'] != 'admin':
+                cursor.execute("""
+                    SELECT 1 FROM dispositivos d
+                    JOIN localizacoes l ON d.localizacao_id = l.id
+                    JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
+                    WHERE d.id = %s AND ul.usuario_id = %s
+                """, (equipamento_id, session['usuario_id']))
+                
+                if not cursor.fetchone():
+                    flash('Acesso negado a este equipamento', 'danger')
+                    return redirect(url_for('configuracoes'))
+            
+            # Buscar dados completos do alimentador
+            cursor.execute("""
+                SELECT 
+                    d.id, d.nome, d.mac_address, d.modelo, d.online,
+                    l.id, l.nome,
+                    a.id, a.capacidade_racao, a.vazao_media, a.nivel_racao_atual,
+                    ca.id, ca.ativa, ca.horario_inicio, ca.horario_fim,
+                    ca.porcoes_por_dia, ca.quantidade_total_diaria,
+                    ca.intervalo_alimentacao, ca.quantidade_por_alimentacao, ca.dias_semana,
+                    cal.id, cal.constante_a, cal.constante_b, cal.tempo_acionamento
+                FROM dispositivos d
+                JOIN localizacoes l ON d.localizacao_id = l.id
+                JOIN alimentadores a ON d.id = a.dispositivo_id
+                LEFT JOIN config_alimentadores ca ON a.id = ca.alimentador_id
+                LEFT JOIN calibracao_alimentadores cal ON a.id = cal.alimentador_id
+                WHERE d.id = %s AND d.tipo = 'alimentador'
+            """, (equipamento_id,))
+            
+            resultado = cursor.fetchone()
+            
+            if not resultado:
+                flash('Alimentador não encontrado', 'danger')
+                return redirect(url_for('configuracoes'))
+            
+            # Converter para dicionário
+            alimentador = {
+                'id': resultado[0],
+                'nome': resultado[1],
+                'mac_address': resultado[2],
+                'modelo': resultado[3],
+                'online': resultado[4],
+                'localizacao_id': resultado[5],
+                'localizacao_nome': resultado[6],
+                'alimentador_id': resultado[7],
+                'capacidade_racao': float(resultado[8]) if resultado[8] else 0,
+                'vazao_media': float(resultado[9]) if resultado[9] else 0,
+                'nivel_racao_atual': float(resultado[10]) if resultado[10] else 0,
+                'config_id': resultado[11],
+                'ativa': resultado[12] if resultado[12] is not None else False,
+                'horario_inicio': resultado[13].strftime('%H:%M') if resultado[13] else '08:00',
+                'horario_fim': resultado[14].strftime('%H:%M') if resultado[14] else '18:00',
+                'porcoes_por_dia': resultado[15] if resultado[15] is not None else 10,
+                'quantidade_total_diaria': float(resultado[16]) if resultado[16] else 150.0,
+                'intervalo_alimentacao': resultado[17] if resultado[17] else 3600,
+                'quantidade_por_alimentacao': float(resultado[18]) if resultado[18] else 15.0,
+                'dias_semana': resultado[19] if resultado[19] else '1,2,3,4,5,6,7',
+                'calibracao_id': resultado[20],
+                'constante_a': float(resultado[21]) if resultado[21] else 0.105,
+                'constante_b': float(resultado[22]) if resultado[22] else 0.0,
+                'tempo_acionamento': resultado[23] if resultado[23] else 1050
             }
             
-            for posicao_key, valor in temperaturas.items():
-                posicao = mapeamento.get(posicao_key.lower(), posicao_key.lower())
-                
-                # Buscar sensor pela posição
+            # Buscar histórico de calibração
+            cursor.execute("""
+                SELECT constante_a, constante_b, calibrado_em
+                FROM calibracao_alimentadores
+                WHERE alimentador_id = %s
+                ORDER BY calibrado_em DESC
+                LIMIT 5
+            """, (alimentador['alimentador_id'],))
+            
+            historico_calibracao = []
+            for row in cursor.fetchall():
+                historico_calibracao.append({
+                    'constante_a': float(row[0]) if row[0] else 0,
+                    'constante_b': float(row[1]) if row[1] else 0,
+                    'calibrado_em': row[2]
+                })
+            
+            # Buscar últimas alimentações
+            cursor.execute("""
+                SELECT quantidade_racao, tempo_acionamento, timestamp, modo
+                FROM historico_alimentacao
+                WHERE alimentador_id = %s
+                ORDER BY timestamp DESC
+                LIMIT 10
+            """, (alimentador['alimentador_id'],))
+            
+            ultimas_alimentacoes = []
+            for row in cursor.fetchall():
+                ultimas_alimentacoes.append({
+                    'quantidade_racao': float(row[0]) if row[0] else 0,
+                    'tempo_acionamento': float(row[1]) if row[1] else 0,
+                    'timestamp': row[2],
+                    'modo': row[3] if row[3] else 'automatico'
+                })
+            
+    except Exception as e:
+        print(f"❌ Erro ao buscar configurações: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Erro ao carregar configurações', 'danger')
+        return redirect(url_for('configuracoes'))
+    finally:
+        conn.close()
+    
+    return render_template('configuracoes_alimentador.html',
+                         alimentador=alimentador,
+                         historico_calibracao=historico_calibracao,
+                         ultimas_alimentacoes=ultimas_alimentacoes,
+                         usuario=session)
+
+
+@app.route('/api/configuracoes/alimentador/<int:alimentador_id>', methods=['PUT'])
+@login_required
+def atualizar_config_alimentador(alimentador_id):
+    """API para atualizar configurações do alimentador"""
+    try:
+        data = request.get_json()
+        print(f"📥 Recebendo configurações para alimentador {alimentador_id}:")
+        print(f"   {data}")
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão'}), 500
+        
+        with conn.cursor() as cursor:
+            # Verificar permissão
+            if session['usuario_tipo'] != 'admin':
                 cursor.execute("""
-                    SELECT id, nome FROM sensores 
-                    WHERE datalogger_id = %s AND posicao = %s AND ativo = true
-                """, (datalogger_id, posicao))
+                    SELECT 1 FROM alimentadores a
+                    JOIN dispositivos d ON a.dispositivo_id = d.id
+                    JOIN localizacoes l ON d.localizacao_id = l.id
+                    JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
+                    WHERE a.id = %s AND ul.usuario_id = %s
+                """, (alimentador_id, session['usuario_id']))
                 
-                sensor = cursor.fetchone()
+                if not cursor.fetchone():
+                    return jsonify({'error': 'Acesso negado'}), 403
+            
+            # ============================================
+            # 1. ATUALIZAR CONFIGURAÇÃO DO ALIMENTADOR
+            # ============================================
+            if 'configuracao' in data:
+                config = data['configuracao']
                 
-                if sensor:
-                    sensor_id, sensor_nome = sensor
+                # Campos que o usuário informa
+                ativa = config.get('ativa')
+                horario_inicio = config.get('horario_inicio')
+                horario_fim = config.get('horario_fim')
+                porcoes_por_dia = config.get('porcoes_por_dia')
+                quantidade_total_diaria = config.get('quantidade_total_diaria')
+                dias_semana = config.get('dias_semana')
+                
+                # CORREÇÃO: Remover os segundos se existirem
+                if horario_inicio and len(horario_inicio) > 5:
+                    horario_inicio = horario_inicio[:5]  # Pega apenas "HH:MM"
+                if horario_fim and len(horario_fim) > 5:
+                    horario_fim = horario_fim[:5]        # Pega apenas "HH:MM"
+                
+                print(f"   Horários processados: inicio={horario_inicio}, fim={horario_fim}")
+                
+                # Calcular automaticamente os campos derivados
+                quantidade_por_alimentacao = None
+                intervalo_alimentacao = None
+                
+                if porcoes_por_dia and quantidade_total_diaria and porcoes_por_dia > 0:
+                    quantidade_por_alimentacao = quantidade_total_diaria / porcoes_por_dia
                     
-                    # Inserir leitura
-                    cursor.execute("""
-                        INSERT INTO leituras_sensores (sensor_id, valor, timestamp)
-                        VALUES (%s, %s, %s)
-                    """, (sensor_id, float(valor), timestamp))
-                    
-                    leituras_processadas += 1
-                    print(f"  ✅ {sensor_nome}: {valor}°C")
-                    
-                    # Verificar limites (opcional)
-                    verificar_limites_temperatura_simples(
-                        cursor, localizacao_id, posicao, float(valor), sensor_nome, timestamp
-                    )
-                else:
-                    print(f"  ⚠️ Sensor não encontrado para posição: {posicao}")
+                    if horario_inicio and horario_fim:
+                        from datetime import datetime
+                        try:
+                            inicio = datetime.strptime(horario_inicio, '%H:%M')
+                            fim = datetime.strptime(horario_fim, '%H:%M')
+                            minutos_total = (fim - inicio).seconds // 60
+                            if minutos_total < 0:
+                                minutos_total += 24 * 60
+                            
+                            if porcoes_por_dia > 1:
+                                intervalo_minutos = minutos_total // (porcoes_por_dia - 1)
+                            else:
+                                intervalo_minutos = minutos_total
+                            
+                            intervalo_alimentacao = intervalo_minutos * 60
+                            print(f"   Cálculo: minutos_total={minutos_total}, intervalo_minutos={intervalo_minutos}")
+                        except Exception as e:
+                            print(f"   Erro no cálculo do intervalo: {e}")
+                            intervalo_alimentacao = 3600
+                
+                # Inserir ou atualizar configuração
+                cursor.execute("""
+                    INSERT INTO config_alimentadores (
+                        alimentador_id, ativa, horario_inicio, horario_fim,
+                        porcoes_por_dia, quantidade_total_diaria,
+                        intervalo_alimentacao, quantidade_por_alimentacao, dias_semana,
+                        updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (alimentador_id) DO UPDATE SET
+                        ativa = EXCLUDED.ativa,
+                        horario_inicio = EXCLUDED.horario_inicio,
+                        horario_fim = EXCLUDED.horario_fim,
+                        porcoes_por_dia = EXCLUDED.porcoes_por_dia,
+                        quantidade_total_diaria = EXCLUDED.quantidade_total_diaria,
+                        intervalo_alimentacao = EXCLUDED.intervalo_alimentacao,
+                        quantidade_por_alimentacao = EXCLUDED.quantidade_por_alimentacao,
+                        dias_semana = EXCLUDED.dias_semana,
+                        updated_at = CURRENT_TIMESTAMP
+                """, (
+                    alimentador_id,
+                    ativa,
+                    horario_inicio,
+                    horario_fim,
+                    porcoes_por_dia,
+                    quantidade_total_diaria,
+                    intervalo_alimentacao,
+                    quantidade_por_alimentacao,
+                    dias_semana
+                ))
+                
+                print(f"   ✅ Configuração salva: {porcoes_por_dia} porções/dia, {quantidade_total_diaria}g total")
+            
+            # ============================================
+            # 2. ATUALIZAR CALIBRAÇÃO
+            # ============================================
+            if 'calibracao' in data:
+                cal = data['calibracao']
+                cursor.execute("""
+                    INSERT INTO calibracao_alimentadores (
+                        alimentador_id, constante_a, constante_b, tempo_acionamento, calibrado_em, updated_at
+                    ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT (alimentador_id) DO UPDATE SET
+                        constante_a = EXCLUDED.constante_a,
+                        constante_b = EXCLUDED.constante_b,
+                        tempo_acionamento = EXCLUDED.tempo_acionamento,
+                        calibrado_em = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP
+                """, (
+                    alimentador_id,
+                    cal.get('constante_a'),
+                    cal.get('constante_b'),
+                    cal.get('tempo_acionamento')
+                ))
+                print("   ✅ Calibração salva")
+            
+            # ============================================
+            # 3. ATUALIZAR ALIMENTADOR (dados físicos)
+            # ============================================
+            if 'alimentador' in data:
+                alm = data['alimentador']
+                cursor.execute("""
+                    UPDATE alimentadores 
+                    SET capacidade_racao = COALESCE(%s, capacidade_racao),
+                        vazao_media = COALESCE(%s, vazao_media),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """, (
+                    alm.get('capacidade_racao'),
+                    alm.get('vazao_media'),
+                    alimentador_id
+                ))
+                print("   ✅ Dados físicos salvos")
+            
+            conn.commit()
+            
+            # Enviar comando para o ESP32 recarregar configurações
+            cursor.execute("""
+                SELECT d.mac_address FROM dispositivos d
+                JOIN alimentadores a ON d.id = a.dispositivo_id
+                WHERE a.id = %s
+            """, (alimentador_id,))
+            
+            mac_result = cursor.fetchone()
+            if mac_result:
+                mac_address = mac_result[0]
+                cursor.execute("""
+                    INSERT INTO comandos_pendentes (mac_address, comando, parametros, criado_por)
+                    VALUES (%s, %s, %s, %s)
+                """, (mac_address, 'configurar', '{"recarregar": true}', session['usuario_id']))
+                print(f"   ✅ Comando enviado para ESP32: {mac_address}")
+                conn.commit()
+            
+            return jsonify({
+                'status': 'sucesso', 
+                'mensagem': 'Configurações atualizadas com sucesso'
+            }), 200
+            
+    except Exception as e:
+        print(f"❌ Erro ao atualizar configurações: {e}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/configuracoes/alimentador/<int:alimentador_id>/acionar', methods=['POST'])
+@login_required
+def acionar_alimentador(alimentador_id):
+    """Aciona o alimentador manualmente"""
+    try:
+        data = request.get_json()
+        peso = data.get('peso', 0)
+        tempo = data.get('tempo', 0)
+        
+        if peso <= 0 and tempo <= 0:
+            return jsonify({'error': 'Informe peso (g) ou tempo (s)'}), 400
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão'}), 500
+        
+        with conn.cursor() as cursor:
+            # Verificar permissão
+            if session['usuario_tipo'] != 'admin':
+                cursor.execute("""
+                    SELECT 1 FROM alimentadores a
+                    JOIN dispositivos d ON a.dispositivo_id = d.id
+                    JOIN localizacoes l ON d.localizacao_id = l.id
+                    JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
+                    WHERE a.id = %s AND ul.usuario_id = %s
+                """, (alimentador_id, session['usuario_id']))
+                
+                if not cursor.fetchone():
+                    return jsonify({'error': 'Acesso negado'}), 403
+            
+            # Buscar MAC e constantes
+            cursor.execute("""
+                SELECT d.mac_address, cal.constante_a, cal.constante_b
+                FROM dispositivos d
+                JOIN alimentadores a ON d.id = a.dispositivo_id
+                JOIN calibracao_alimentadores cal ON a.id = cal.alimentador_id
+                WHERE a.id = %s
+            """, (alimentador_id,))
+            
+            resultado = cursor.fetchone()
+            if not resultado:
+                return jsonify({'error': 'Alimentador não encontrado'}), 404
+            
+            mac_address, constante_a, constante_b = resultado
+            
+            # Calcular tempo
+            if peso > 0:
+                tempo_calculado = (peso * constante_a) + constante_b
+            else:
+                tempo_calculado = tempo
+            
+            # Criar comando pendente
+            cursor.execute("""
+                INSERT INTO comandos_pendentes (mac_address, comando, parametros, criado_por)
+                VALUES (%s, %s, %s, %s)
+            """, (mac_address, 'alimentar', f'{{"tempo": {tempo_calculado}, "peso": {peso}}}', session['usuario_id']))
             
             conn.commit()
             
             return jsonify({
-                'status': 'sucesso',
-                'mensagem': f'{leituras_processadas} leitura(s) processada(s)',
-                'dispositivo_id': dispositivo_id,
-                'leituras': leituras_processadas
+                'status': 'sucesso', 
+                'mensagem': f'Comando enviado: {tempo_calculado:.2f} segundos',
+                'tempo': tempo_calculado
             }), 200
+            
+    except Exception as e:
+        print(f"❌ Erro ao acionar alimentador: {e}")
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# ============================================
+# ROTAS ATUALIZADAS PARA DATALOGGER ESP32
+# ============================================
+
+@app.route('/api/datalogger/autocadastro', methods=['POST'])
+def autocadastro_datalogger_esp32():
+    """
+    Autocadastro de datalogger ESP32
+    Formato esperado:
+    {
+        "identificacao": {
+            "mac": "AA:BB:CC:DD:EE:FF",
+            "nome": "Datalogger ABC123",
+            "tipo": "datalogger",
+            "modelo": "ESP32",
+            "versao_firmware": "1.0.0",
+            "localizacao": {
+                "nome": "Estufa Principal",
+                "tipo": "estufa"
+            },
+            "sensores": [
+                {"nome": "Sensor Água", "tipo": "temperatura", "posicao": "agua", "unidade": "°C", "endereco": "DS18B20_agua"},
+                {"nome": "Sensor Estufa", "tipo": "temperatura", "posicao": "estufa", "unidade": "°C", "endereco": "DS18B20_estufa"},
+                {"nome": "Sensor Externa", "tipo": "temperatura", "posicao": "externa", "unidade": "°C", "endereco": "DS18B20_externa"}
+            ]
+        }
+    }
+    """
+    print("\n" + "="*60)
+    print("🌡️ AUTOCADASTRO DATALOGGER ESP32")
+    print("="*60)
+    
+    try:
+        if not request.is_json:
+            return jsonify({'error': 'Content-Type deve ser application/json'}), 400
+        
+        data = request.get_json()
+        
+        if 'identificacao' not in data:
+            return jsonify({'error': 'Campo "identificacao" é obrigatório'}), 400
+        
+        identificacao = data['identificacao']
+        mac_address = identificacao.get('mac', '').strip().upper()
+        
+        if not mac_address:
+            return jsonify({'error': 'MAC address é obrigatório'}), 400
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão'}), 500
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Verificar se datalogger já existe
+            cursor.execute("""
+                SELECT d.id, d.nome, dl.id as datalogger_id
+                FROM dispositivos d
+                JOIN dataloggers dl ON d.id = dl.dispositivo_id
+                WHERE d.mac_address = %s AND d.tipo = 'datalogger'
+            """, (mac_address,))
+            
+            existente = cursor.fetchone()
+            
+            if existente:
+                print(f"✅ Datalogger já existe: {existente['nome']}")
+                # Atualizar online status
+                cursor.execute("""
+                    UPDATE dispositivos 
+                    SET online = true, ultima_comunicacao = %s
+                    WHERE id = %s
+                """, (datetime.now(), existente['id']))
+                conn.commit()
+                
+                # Buscar configurações
+                config = buscar_config_datalogger_simples(cursor, existente['id'])
+                
+                return jsonify({
+                    'status': 'sucesso',
+                    'mensagem': 'Datalogger já cadastrado',
+                    'datalogger_id': existente['id'],
+                    'config': config
+                }), 200
+            
+            # Criar novo datalogger
+            print(f"🆕 Criando novo datalogger: {mac_address}")
+            
+            # Criar localização
+            localizacao_info = identificacao.get('localizacao', {})
+            localizacao_nome = localizacao_info.get('nome', f'Local-{mac_address[-8:]}')
+            localizacao_tipo = localizacao_info.get('tipo', 'estufa')
+            
+            # Verificar se localização já existe
+            cursor.execute("SELECT id FROM localizacoes WHERE nome = %s", (localizacao_nome,))
+            localizacao = cursor.fetchone()
+            
+            if localizacao:
+                localizacao_id = localizacao['id']
+            else:
+                cursor.execute("""
+                    INSERT INTO localizacoes (nome, tipo, descricao)
+                    VALUES (%s, %s, %s)
+                    RETURNING id
+                """, (localizacao_nome, localizacao_tipo, f'Localização automática para {mac_address}'))
+                localizacao_id = cursor.fetchone()['id']
+                
+                # Associar ao admin
+                cursor.execute("SELECT id FROM usuarios WHERE tipo = 'admin' LIMIT 1")
+                admin = cursor.fetchone()
+                if admin:
+                    cursor.execute("""
+                        INSERT INTO usuario_localizacao (usuario_id, localizacao_id)
+                        VALUES (%s, %s)
+                        ON CONFLICT DO NOTHING
+                    """, (admin['id'], localizacao_id))
+            
+            # Criar dispositivo
+            nome_equipamento = identificacao.get('nome', f'Datalogger {mac_address[-8:]}')
+            cursor.execute("""
+                INSERT INTO dispositivos (
+                    localizacao_id, nome, descricao, mac_address,
+                    tipo, modelo, versao_firmware, online, ultima_comunicacao
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                localizacao_id,
+                nome_equipamento,
+                f'Datalogger autocadastrado - MAC: {mac_address}',
+                mac_address,
+                'datalogger',
+                identificacao.get('modelo', 'ESP32'),
+                identificacao.get('versao_firmware', '1.0.0'),
+                True,
+                datetime.now()
+            ))
+            
+            dispositivo_id = cursor.fetchone()['id']
+            
+            # Criar datalogger
+            cursor.execute("""
+                INSERT INTO dataloggers (dispositivo_id, quantidade_sensores, intervalo_leitura)
+                VALUES (%s, %s, %s)
+                RETURNING id
+            """, (dispositivo_id, 3, 60))
+            
+            datalogger_id = cursor.fetchone()['id']
+            
+            # Criar sensores
+            sensores_info = identificacao.get('sensores', [])
+            if not sensores_info:
+                # Sensores padrão
+                sensores_info = [
+                    {'nome': 'Sensor Água', 'tipo': 'temperatura', 'posicao': 'agua', 'unidade': '°C', 'endereco': 'DS18B20_agua'},
+                    {'nome': 'Sensor Estufa', 'tipo': 'temperatura', 'posicao': 'estufa', 'unidade': '°C', 'endereco': 'DS18B20_estufa'},
+                    {'nome': 'Sensor Externa', 'tipo': 'temperatura', 'posicao': 'externa', 'unidade': '°C', 'endereco': 'DS18B20_externa'}
+                ]
+            
+            for sensor in sensores_info:
+                cursor.execute("""
+                    INSERT INTO sensores (datalogger_id, nome, tipo, unidade, posicao, endereco, ativo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    datalogger_id,
+                    sensor['nome'],
+                    sensor.get('tipo', 'temperatura'),
+                    sensor.get('unidade', '°C'),
+                    sensor['posicao'],
+                    sensor.get('endereco', f"DS18B20_{datalogger_id}_{sensor['posicao']}"),
+                    True
+                ))
+            
+            # Criar limites padrão
+            criar_limites_padrao(cursor, localizacao_id)
+            
+            conn.commit()
+            
+            print(f"✅ Datalogger criado! ID: {dispositivo_id}")
+            
+            # Buscar configurações
+            config = buscar_config_datalogger_simples(cursor, dispositivo_id)
+            
+            return jsonify({
+                'status': 'sucesso',
+                'mensagem': 'Datalogger cadastrado com sucesso',
+                'datalogger_id': dispositivo_id,
+                'config': config
+            }), 201
             
     except Exception as e:
         print(f"❌ Erro: {e}")
@@ -3869,89 +6227,961 @@ def receber_dados_esp32():
         traceback.print_exc()
         if conn:
             conn.rollback()
-        return jsonify({'erro': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
     finally:
         if conn:
             conn.close()
 
 
-@app.route('/api/esp32/status', methods=['POST'])
-def atualizar_status_esp32():
-    """Recebe status do ESP32"""
+@app.route('/api/datalogger/dados', methods=['POST'])
+def receber_dados_datalogger_esp32():
+    """
+    Recebe dados de temperatura do datalogger ESP32
+    Formato esperado:
+    {
+        "mac": "AA:BB:CC:DD:EE:FF",
+        "timestamp": "2024-01-15 10:30:00",
+        "sensores": {
+            "agua": 25.5,
+            "estufa": 28.3,
+            "externa": 22.1
+        }
+    }
+    """
+    print("\n" + "="*60)
+    print("📊 RECEBENDO DADOS DO DATALOGGER ESP32")
+    print("="*60)
+    
     try:
+        # Verificar se é JSON
         if not request.is_json:
-            return jsonify({'erro': 'JSON esperado'}), 400
+            print("❌ Content-Type não é JSON")
+            return jsonify({'error': 'Content-Type deve ser application/json'}), 400
         
-        dados = request.get_json()
-        mac_address = dados.get('mac', '').strip().upper()
+        data = request.get_json()
+        print(f"📥 Dados recebidos: {data}")
+        
+        # Validar MAC address
+        mac_address = data.get('mac', '') or data.get('mac_address', '')
+        mac_address = mac_address.strip().upper()
         
         if not mac_address:
-            return jsonify({'erro': 'MAC é obrigatório'}), 400
+            print("❌ MAC address não fornecido")
+            return jsonify({'error': 'MAC address é obrigatório'}), 400
+        
+        print(f"🔑 MAC Address: {mac_address}")
+        
+        # Conectar ao banco
+        conn = db.get_connection()
+        if not conn:
+            print("❌ Erro de conexão com o banco")
+            return jsonify({'error': 'Erro de conexão com o banco de dados'}), 500
+        
+        try:
+            with conn.cursor() as cursor:
+                # 1. Buscar o datalogger pelo MAC
+                cursor.execute("""
+                    SELECT d.id, d.localizacao_id, dl.id as datalogger_id, d.nome
+                    FROM dispositivos d
+                    JOIN dataloggers dl ON d.id = dl.dispositivo_id
+                    WHERE d.mac_address = %s AND d.tipo = 'datalogger'
+                """, (mac_address,))
+                
+                datalogger = cursor.fetchone()
+                
+                if not datalogger:
+                    print(f"❌ Datalogger não encontrado: {mac_address}")
+                    return jsonify({
+                        'error': f'Datalogger com MAC {mac_address} não encontrado',
+                        'sugestao': 'Cadastre o equipamento primeiro usando /api/equipamento/autocadastro'
+                    }), 404
+                
+                # Usar índices numéricos
+                dispositivo_id = datalogger[0]
+                localizacao_id = datalogger[1]
+                datalogger_id = datalogger[2]
+                nome_datalogger = datalogger[3]
+                
+                print(f"✅ Datalogger encontrado: {nome_datalogger} (ID: {dispositivo_id})")
+                
+                # 2. Atualizar última comunicação
+                agora = datetime.now()
+                cursor.execute("""
+                    UPDATE dispositivos 
+                    SET online = true, ultima_comunicacao = %s
+                    WHERE id = %s
+                """, (agora, dispositivo_id))
+                
+                print(f"✅ Status atualizado: online=true")
+                
+                # 3. Processar timestamp
+                timestamp_str = data.get('timestamp', agora.isoformat())
+                try:
+                    for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S.%f']:
+                        try:
+                            timestamp = datetime.strptime(timestamp_str, fmt)
+                            break
+                        except ValueError:
+                            continue
+                    else:
+                        timestamp = agora
+                except Exception:
+                    timestamp = agora
+                
+                # 4. Processar leituras dos sensores
+                sensores_data = data.get('sensores', {})
+                leituras_processadas = 0
+                erros = []
+                
+                print(f"📈 Sensores recebidos: {list(sensores_data.keys())}")
+                
+                for posicao, valor in sensores_data.items():
+                    if valor is None:
+                        erros.append(f"Valor nulo para {posicao}")
+                        continue
+                    
+                    try:
+                        valor_float = float(valor)
+                        
+                        # Buscar sensor pela posição
+                        cursor.execute("""
+                            SELECT id, nome
+                            FROM sensores 
+                            WHERE datalogger_id = %s AND posicao = %s AND ativo = true
+                        """, (datalogger_id, posicao))
+                        
+                        sensor = cursor.fetchone()
+                        
+                        if sensor:
+                            sensor_id = sensor[0]
+                            sensor_nome = sensor[1]
+                            
+                            # Inserir leitura
+                            cursor.execute("""
+                                INSERT INTO leituras_sensores (sensor_id, valor, timestamp)
+                                VALUES (%s, %s, %s)
+                            """, (sensor_id, valor_float, timestamp))
+                            leituras_processadas += 1
+                            print(f"  ✅ {posicao}: {valor_float}°C registrado")
+                            
+                            # Verificar limites de temperatura
+                            if localizacao_id and posicao in ['agua', 'estufa', 'externa']:
+                                try:
+                                    cursor.execute("""
+                                        SELECT maximo, minimo 
+                                        FROM limites_temperatura 
+                                        WHERE localizacao_id = %s AND tipo_sensor = %s
+                                    """, (localizacao_id, posicao))
+                                    
+                                    limite = cursor.fetchone()
+                                    
+                                    if limite:
+                                        maximo, minimo = limite
+                                        if valor_float > maximo or valor_float < minimo:
+                                            tipo_alerta = "TEMPERATURA_ALTA" if valor_float > maximo else "TEMPERATURA_BAIXA"
+                                            mensagem = f"Temperatura {posicao}: {valor_float:.1f}°C fora do limite ({minimo:.0f}-{maximo:.0f}°C)"
+                                            
+                                            cursor.execute("""
+                                                INSERT INTO alertas (localizacao_id, tipo, severidade, mensagem, timestamp)
+                                                VALUES (%s, %s, %s, %s, %s)
+                                            """, (localizacao_id, tipo_alerta, 'MEDIA', mensagem, timestamp))
+                                            print(f"  ⚠️ Alerta: {mensagem}")
+                                except Exception as e:
+                                    print(f"  ⚠️ Erro ao verificar limites: {e}")
+                        else:
+                            print(f"  ⚠️ Sensor não encontrado para posição: {posicao}")
+                            erros.append(f"Sensor não encontrado: {posicao}")
+                            
+                    except Exception as e:
+                        print(f"  ❌ Erro ao processar {posicao}: {e}")
+                        erros.append(f"{posicao}: {str(e)}")
+                        continue
+                
+                # 5. Atualizar quantidade de sensores do datalogger
+                if sensores_data:
+                    cursor.execute("""
+                        UPDATE dataloggers 
+                        SET quantidade_sensores = %s
+                        WHERE id = %s
+                    """, (len(sensores_data), datalogger_id))
+                
+                conn.commit()
+                
+                print(f"\n✅ RESULTADO: {leituras_processadas}/{len(sensores_data)} leituras processadas")
+                
+                # 6. Preparar resposta
+                resposta = {
+                    'status': 'sucesso',
+                    'mensagem': f'{leituras_processadas} leitura(s) processada(s)',
+                    'datalogger_id': dispositivo_id,
+                    'datalogger_nome': nome_datalogger,
+                    'leituras_processadas': leituras_processadas,
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+                if erros:
+                    resposta['erros'] = erros
+                    resposta['status'] = 'parcial' if leituras_processadas > 0 else 'erro'
+                
+                return jsonify(resposta), 200
+                
+        except Exception as e:
+            print(f"❌ Erro no processamento: {e}")
+            import traceback
+            traceback.print_exc()
+            if conn:
+                conn.rollback()
+            return jsonify({'error': str(e)}), 500
+        finally:
+            if conn:
+                conn.close()
+            
+    except Exception as e:
+        print(f"❌ Erro geral: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/datalogger/autocadastro', methods=['POST'])
+def autocadastro_emergencia():
+    """Rota de emergência para autocadastro - sempre funciona"""
+    print("\n" + "="*60)
+    print("🚨 AUTOCADASTRO DE EMERGÊNCIA")
+    print("="*60)
+    
+    try:
+        if not request.is_json:
+            return jsonify({'error': 'Content-Type deve ser application/json'}), 400
+        
+        data = request.get_json()
+        print(f"📥 Dados recebidos: {data}")
+        
+        identificacao = data.get('identificacao', {})
+        mac_address = identificacao.get('mac', '').strip().upper()
+        
+        if not mac_address:
+            return jsonify({'error': 'MAC address é obrigatório'}), 400
+        
+        nome = identificacao.get('nome', f'Datalogger {mac_address[-8:]}')
+        modelo = identificacao.get('modelo', 'ESP32')
+        versao = identificacao.get('versao_firmware', '1.0.0')
+        
+        # Informações da localização
+        localizacao_info = identificacao.get('localizacao', {})
+        localizacao_nome = localizacao_info.get('nome', f'Local-{mac_address[-8:]}')
+        localizacao_tipo = localizacao_info.get('tipo', 'estufa')
+        
+        # Informações dos sensores
+        sensores_info = identificacao.get('sensores', [])
         
         conn = db.get_connection()
         if not conn:
-            return jsonify({'erro': 'Erro de conexão'}), 500
+            return jsonify({'error': 'Erro de conexão com o banco'}), 500
         
         with conn.cursor() as cursor:
+            # 1. Verificar se já existe
             cursor.execute("""
-                UPDATE dispositivos 
-                SET online = true, ultima_comunicacao = %s
-                WHERE mac_address = %s AND tipo = 'datalogger'
-            """, (datetime.now(), mac_address))
+                SELECT d.id, dl.id as datalogger_id
+                FROM dispositivos d
+                LEFT JOIN dataloggers dl ON d.id = dl.dispositivo_id
+                WHERE d.mac_address = %s AND d.tipo = 'datalogger'
+            """, (mac_address,))
+            
+            existente = cursor.fetchone()
+            
+            if existente:
+                dispositivo_id = existente[0]
+                print(f"✅ Datalogger já existe: ID {dispositivo_id}")
+                
+                # Atualizar online
+                cursor.execute("""
+                    UPDATE dispositivos 
+                    SET online = true, ultima_comunicacao = %s
+                    WHERE id = %s
+                """, (datetime.now(), dispositivo_id))
+                conn.commit()
+                
+                return jsonify({
+                    'status': 'sucesso',
+                    'mensagem': 'Datalogger já cadastrado',
+                    'datalogger_id': dispositivo_id
+                }), 200
+            
+            # 2. Criar localização
+            cursor.execute("""
+                SELECT id FROM localizacoes WHERE nome = %s
+            """, (localizacao_nome,))
+            
+            localizacao = cursor.fetchone()
+            
+            if localizacao:
+                localizacao_id = localizacao[0]
+            else:
+                cursor.execute("""
+                    INSERT INTO localizacoes (nome, tipo, descricao)
+                    VALUES (%s, %s, %s)
+                    RETURNING id
+                """, (localizacao_nome, localizacao_tipo, f'Localização para {mac_address}'))
+                localizacao_id = cursor.fetchone()[0]
+            
+            # 3. Criar dispositivo
+            cursor.execute("""
+                INSERT INTO dispositivos (
+                    localizacao_id, nome, descricao, mac_address,
+                    tipo, modelo, versao_firmware, online, ultima_comunicacao
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                localizacao_id,
+                nome,
+                f'Datalogger autocadastrado - MAC: {mac_address}',
+                mac_address,
+                'datalogger',
+                modelo,
+                versao,
+                True,
+                datetime.now()
+            ))
+            
+            dispositivo_id = cursor.fetchone()[0]
+            
+            # 4. Criar datalogger
+            cursor.execute("""
+                INSERT INTO dataloggers (dispositivo_id, quantidade_sensores, intervalo_leitura)
+                VALUES (%s, %s, %s)
+                RETURNING id
+            """, (dispositivo_id, len(sensores_info) if sensores_info else 3, 60))
+            
+            datalogger_id = cursor.fetchone()[0]
+            
+            # 5. Criar sensores
+            if not sensores_info:
+                # Sensores padrão
+                sensores_padrao = [
+                    ('Sensor Água', 'temperatura', '°C', 'agua', f'DS18B20_{datalogger_id}_agua'),
+                    ('Sensor Estufa', 'temperatura', '°C', 'estufa', f'DS18B20_{datalogger_id}_estufa'),
+                    ('Sensor Externa', 'temperatura', '°C', 'externa', f'DS18B20_{datalogger_id}_externa')
+                ]
+                for nome_sensor, tipo_sensor, unidade, posicao, endereco in sensores_padrao:
+                    cursor.execute("""
+                        INSERT INTO sensores (datalogger_id, nome, tipo, unidade, posicao, endereco, ativo)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (datalogger_id, nome_sensor, tipo_sensor, unidade, posicao, endereco, True))
+            else:
+                for sensor in sensores_info:
+                    cursor.execute("""
+                        INSERT INTO sensores (datalogger_id, nome, tipo, unidade, posicao, endereco, ativo)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        datalogger_id,
+                        sensor.get('nome', 'Sensor'),
+                        sensor.get('tipo', 'temperatura'),
+                        sensor.get('unidade', '°C'),
+                        sensor.get('posicao', 'desconhecido'),
+                        sensor.get('endereco', f'DS18B20_{datalogger_id}'),
+                        True
+                    ))
+            
+            # 6. Criar limites padrão
+            limites_padrao = [('agua', 30.0, 20.0), ('estufa', 35.0, 25.0), ('externa', 40.0, 15.0)]
+            for tipo_sensor, maximo, minimo in limites_padrao:
+                cursor.execute("""
+                    INSERT INTO limites_temperatura (localizacao_id, tipo_sensor, maximo, minimo)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (localizacao_id, tipo_sensor) DO NOTHING
+                """, (localizacao_id, tipo_sensor, maximo, minimo))
             
             conn.commit()
             
+            print(f"✅ Datalogger criado com sucesso! ID: {dispositivo_id}")
+            
             return jsonify({
-                'status': 'ok',
-                'mensagem': 'Status atualizado'
-            }), 200
+                'status': 'sucesso',
+                'mensagem': 'Datalogger cadastrado com sucesso!',
+                'datalogger_id': dispositivo_id
+            }), 201
             
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        print(f"❌ Erro no autocadastro: {e}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         if conn:
             conn.close()
 
-
-@app.route('/api/esp32/config', methods=['GET'])
-def obter_config_esp32():
-    """ESP32 obtém sua configuração"""
+@app.route('/api/datalogger/config', methods=['GET'])
+def get_config_datalogger_esp32():
+    """
+    Retorna configurações do datalogger para o ESP32
+    Parâmetros: mac_address
+    """
+    mac_address = request.args.get('mac_address', '').strip().upper()
+    
+    if not mac_address:
+        return jsonify({'error': 'mac_address é obrigatório'}), 400
+    
+    conn = db.get_connection()
+    if not conn:
+        return jsonify({'error': 'Erro de conexão'}), 500
+    
     try:
-        mac_address = request.args.get('mac', '').strip().upper()
-        
-        if not mac_address:
-            return jsonify({'erro': 'MAC é obrigatório'}), 400
-        
-        conn = db.get_connection()
-        if not conn:
-            return jsonify({'erro': 'Erro de conexão'}), 500
-        
-        with conn.cursor() as cursor:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute("""
-                SELECT d.nome, dl.intervalo_leitura
+                SELECT d.id, d.localizacao_id, dl.intervalo_leitura
                 FROM dispositivos d
                 JOIN dataloggers dl ON d.id = dl.dispositivo_id
                 WHERE d.mac_address = %s AND d.tipo = 'datalogger'
             """, (mac_address,))
             
-            config = cursor.fetchone()
+            dispositivo = cursor.fetchone()
+            if not dispositivo:
+                return jsonify({'error': 'Datalogger não encontrado'}), 404
             
-            if not config:
-                return jsonify({'erro': 'Dispositivo não encontrado'}), 404
+            # Buscar limites de temperatura
+            cursor.execute("""
+                SELECT tipo_sensor, maximo, minimo
+                FROM limites_temperatura
+                WHERE localizacao_id = %s
+            """, (dispositivo['localizacao_id'],))
             
-            nome, intervalo = config
+            limites = cursor.fetchall()
+            
+            limites_dict = {}
+            for limite in limites:
+                limites_dict[limite['tipo_sensor']] = {
+                    'max': float(limite['maximo']),
+                    'min': float(limite['minimo'])
+                }
             
             return jsonify({
-                'status': 'ok',
-                'nome': nome,
-                'intervalo_segundos': intervalo,
-                'versao_api': '1.0'
+                'status': 'sucesso',
+                'config': {
+                    'intervalo_leitura': dispositivo['intervalo_leitura'],
+                    'limites': limites_dict
+                }
             }), 200
             
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        print(f"❌ Erro: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+# ============================================
+# FUNÇÕES AUXILIARES
+# ============================================
+
+def buscar_config_datalogger_simples(cursor, dispositivo_id):
+    """Busca configurações básicas do datalogger"""
+    cursor.execute("""
+        SELECT d.localizacao_id, dl.intervalo_leitura
+        FROM dispositivos d
+        JOIN dataloggers dl ON d.id = dl.dispositivo_id
+        WHERE d.id = %s
+    """, (dispositivo_id,))
+    
+    resultado = cursor.fetchone()
+    if not resultado:
+        return {'intervalo_leitura': 60, 'limites': {}}
+    
+    # Buscar limites
+    cursor.execute("""
+        SELECT tipo_sensor, maximo, minimo
+        FROM limites_temperatura
+        WHERE localizacao_id = %s
+    """, (resultado['localizacao_id'],))
+    
+    limites = cursor.fetchall()
+    limites_dict = {}
+    for limite in limites:
+        limites_dict[limite['tipo_sensor']] = {
+            'max': float(limite['maximo']),
+            'min': float(limite['minimo'])
+        }
+    
+    return {
+        'intervalo_leitura': resultado['intervalo_leitura'],
+        'limites': limites_dict
+    }
+
+
+def criar_limites_padrao(cursor, localizacao_id):
+    """Cria limites de temperatura padrão"""
+    limites_padrao = [
+        ('agua', 30.0, 20.0),
+        ('estufa', 35.0, 25.0),
+        ('externa', 40.0, 15.0)
+    ]
+    
+    for tipo, maximo, minimo in limites_padrao:
+        cursor.execute("""
+            INSERT INTO limites_temperatura (localizacao_id, tipo_sensor, maximo, minimo)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (localizacao_id, tipo_sensor) DO NOTHING
+        """, (localizacao_id, tipo, maximo, minimo))
+
+
+def verificar_limites_temperatura_simples(cursor, localizacao_id, posicao, valor, sensor_nome, timestamp):
+    """Verifica limites de temperatura e gera alertas"""
+    try:
+        cursor.execute("""
+            SELECT maximo, minimo 
+            FROM limites_temperatura 
+            WHERE localizacao_id = %s AND tipo_sensor = %s
+        """, (localizacao_id, posicao))
+        
+        limite = cursor.fetchone()
+        
+        if limite and (valor > limite['maximo'] or valor < limite['minimo']):
+            tipo_alerta = "TEMPERATURA_ALTA" if valor > limite['maximo'] else "TEMPERATURA_BAIXA"
+            
+            mensagem = (
+                f"Temperatura {posicao} ({sensor_nome}): {valor:.1f}°C "
+                f"{'acima' if valor > limite['maximo'] else 'abaixo'} do limite "
+                f"({limite['maximo'] if valor > limite['maximo'] else limite['minimo']}°C)"
+            )
+            
+            cursor.execute("""
+                INSERT INTO alertas (localizacao_id, tipo, severidade, mensagem, timestamp)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (localizacao_id, tipo_alerta, 'MEDIA', mensagem, timestamp))
+            print(f"⚠️ Alerta: {mensagem}")
+            
+    except Exception as e:
+        print(f"⚠️ Erro ao verificar limites: {e}")
+# ============================================
+# ROTAS DA API PARA DATALOGGER - CONFIGURAÇÕES
+# ============================================
+
+@app.route('/api/configuracoes/datalogger/<int:datalogger_id>', methods=['PUT'])
+@login_required
+def atualizar_config_datalogger(datalogger_id):
+    """API para atualizar configurações do datalogger"""
+    try:
+        data = request.get_json()
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão'}), 500
+        
+        with conn.cursor() as cursor:
+            # Verificar permissão
+            if session['usuario_tipo'] != 'admin':
+                cursor.execute("""
+                    SELECT 1 FROM dispositivos d
+                    JOIN localizacoes l ON d.localizacao_id = l.id
+                    JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
+                    WHERE d.id = %s AND ul.usuario_id = %s
+                """, (datalogger_id, session['usuario_id']))
+                
+                if not cursor.fetchone():
+                    return jsonify({'error': 'Acesso negado'}), 403
+            
+            # Atualizar dispositivo
+            if 'nome' in data:
+                cursor.execute("""
+                    UPDATE dispositivos 
+                    SET nome = %s, modelo = %s, descricao = %s, localizacao_id = %s
+                    WHERE id = %s
+                """, (data['nome'], data.get('modelo'), data.get('descricao'), 
+                      data.get('localizacao_id'), datalogger_id))
+            
+            # Atualizar intervalo do datalogger
+            if 'intervalo_leitura' in data:
+                cursor.execute("""
+                    UPDATE dataloggers 
+                    SET intervalo_leitura = %s
+                    WHERE dispositivo_id = %s
+                """, (data['intervalo_leitura'], datalogger_id))
+            
+            # Atualizar limites de temperatura
+            if 'limites' in data:
+                limites = data['limites']
+                for posicao, valores in limites.items():
+                    cursor.execute("""
+                        INSERT INTO limites_temperatura (localizacao_id, tipo_sensor, maximo, minimo)
+                        SELECT localizacao_id, %s, %s, %s
+                        FROM dispositivos WHERE id = %s
+                        ON CONFLICT (localizacao_id, tipo_sensor) DO UPDATE SET
+                            maximo = EXCLUDED.maximo,
+                            minimo = EXCLUDED.minimo,
+                            updated_at = CURRENT_TIMESTAMP
+                    """, (posicao, valores['max'], valores['min'], datalogger_id))
+            
+            conn.commit()
+            
+            # Enviar comando para o ESP32 recarregar configurações
+            cursor.execute("""
+                SELECT mac_address FROM dispositivos WHERE id = %s
+            """, (datalogger_id,))
+            
+            mac_result = cursor.fetchone()
+            if mac_result:
+                mac_address = mac_result[0]
+                cursor.execute("""
+                    INSERT INTO comandos_pendentes (mac_address, comando, parametros, criado_por)
+                    VALUES (%s, %s, %s, %s)
+                """, (mac_address, 'configurar', '{"recarregar": true}', session['usuario_id']))
+                conn.commit()
+            
+            return jsonify({'status': 'sucesso', 'mensagem': 'Configurações atualizadas'}), 200
+            
+    except Exception as e:
+        print(f"❌ Erro: {e}")
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         if conn:
             conn.close()
+
+@app.route('/api/configuracoes/datalogger/<int:datalogger_id>', methods=['PUT'])
+@login_required
+def atualizar_config_datalogger_api(datalogger_id):
+    """API para atualizar configurações do datalogger"""
+    try:
+        data = request.get_json()
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão'}), 500
+        
+        with conn.cursor() as cursor:
+            # Verificar permissão
+            if session['usuario_tipo'] != 'admin':
+                cursor.execute("""
+                    SELECT 1 FROM dispositivos d
+                    JOIN localizacoes l ON d.localizacao_id = l.id
+                    JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
+                    WHERE d.id = %s AND ul.usuario_id = %s
+                """, (datalogger_id, session['usuario_id']))
+                
+                if not cursor.fetchone():
+                    return jsonify({'error': 'Acesso negado'}), 403
+            
+            # Atualizar dispositivo
+            if 'nome' in data:
+                cursor.execute("""
+                    UPDATE dispositivos 
+                    SET nome = %s, modelo = %s, descricao = %s, localizacao_id = %s
+                    WHERE id = %s
+                """, (data['nome'], data.get('modelo'), data.get('descricao'), 
+                      data.get('localizacao_id'), datalogger_id))
+            
+            # Atualizar intervalo do datalogger
+            if 'intervalo_leitura' in data:
+                cursor.execute("""
+                    UPDATE dataloggers 
+                    SET intervalo_leitura = %s
+                    WHERE dispositivo_id = %s
+                """, (data['intervalo_leitura'], datalogger_id))
+            
+            # Atualizar limites de temperatura
+            if 'limites' in data:
+                # Buscar localizacao_id
+                cursor.execute("SELECT localizacao_id FROM dispositivos WHERE id = %s", (datalogger_id,))
+                localizacao_id = cursor.fetchone()[0]
+                
+                limites = data['limites']
+                for posicao, valores in limites.items():
+                    cursor.execute("""
+                        INSERT INTO limites_temperatura (localizacao_id, tipo_sensor, maximo, minimo)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (localizacao_id, tipo_sensor) DO UPDATE SET
+                            maximo = EXCLUDED.maximo,
+                            minimo = EXCLUDED.minimo,
+                            updated_at = CURRENT_TIMESTAMP
+                    """, (localizacao_id, posicao, valores['max'], valores['min']))
+            
+            conn.commit()
+            
+            return jsonify({'status': 'sucesso', 'mensagem': 'Configurações atualizadas'}), 200
+            
+    except Exception as e:
+        print(f"❌ Erro: {e}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/datalogger/dados/historico/<int:datalogger_id>', methods=['GET'])
+@login_required
+def obter_historico_datalogger(datalogger_id):
+    """Retorna histórico de dados do datalogger"""
+    try:
+        horas = int(request.args.get('horas', 24))
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão'}), 500
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Verificar permissão
+            if session['usuario_tipo'] != 'admin':
+                cursor.execute("""
+                    SELECT 1 FROM dispositivos d
+                    JOIN localizacoes l ON d.localizacao_id = l.id
+                    JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
+                    WHERE d.id = %s AND ul.usuario_id = %s
+                """, (datalogger_id, session['usuario_id']))
+                
+                if not cursor.fetchone():
+                    return jsonify({'error': 'Acesso negado'}), 403
+            
+            # Buscar dados
+            cursor.execute("""
+                SELECT 
+                    ls.timestamp,
+                    MAX(CASE WHEN s.posicao = 'agua' THEN ls.valor END) as agua,
+                    MAX(CASE WHEN s.posicao = 'estufa' THEN ls.valor END) as estufa,
+                    MAX(CASE WHEN s.posicao = 'externa' THEN ls.valor END) as externa
+                FROM leituras_sensores ls
+                JOIN sensores s ON ls.sensor_id = s.id
+                JOIN dataloggers dl ON s.datalogger_id = dl.id
+                WHERE dl.dispositivo_id = %s
+                    AND ls.timestamp >= NOW() - INTERVAL '%s hours'
+                GROUP BY DATE_TRUNC('hour', ls.timestamp), ls.timestamp
+                ORDER BY ls.timestamp DESC
+                LIMIT 1000
+            """, (datalogger_id, horas))
+            
+            dados = cursor.fetchall()
+            
+            # Estatísticas
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total_leituras,
+                    MAX(ls.timestamp) as ultima_leitura
+                FROM leituras_sensores ls
+                JOIN sensores s ON ls.sensor_id = s.id
+                JOIN dataloggers dl ON s.datalogger_id = dl.id
+                WHERE dl.dispositivo_id = %s
+            """, (datalogger_id,))
+            
+            estatisticas = cursor.fetchone()
+            
+            return jsonify({
+                'status': 'sucesso',
+                'dados': dados,
+                'estatisticas': estatisticas
+            }), 200
+            
+    except Exception as e:
+        print(f"❌ Erro: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/datalogger/dados/exportar/<int:datalogger_id>', methods=['GET'])
+@login_required
+def exportar_dados_datalogger(datalogger_id):
+    """Exporta dados do datalogger para CSV"""
+    try:
+        horas = int(request.args.get('horas', 24))
+        
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Erro de conexão'}), 500
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Buscar dados
+            cursor.execute("""
+                SELECT 
+                    ls.timestamp,
+                    MAX(CASE WHEN s.posicao = 'agua' THEN ls.valor END) as agua,
+                    MAX(CASE WHEN s.posicao = 'estufa' THEN ls.valor END) as estufa,
+                    MAX(CASE WHEN s.posicao = 'externa' THEN ls.valor END) as externa
+                FROM leituras_sensores ls
+                JOIN sensores s ON ls.sensor_id = s.id
+                JOIN dataloggers dl ON s.datalogger_id = dl.id
+                WHERE dl.dispositivo_id = %s
+                    AND ls.timestamp >= NOW() - INTERVAL '%s hours'
+                GROUP BY ls.timestamp
+                ORDER BY ls.timestamp ASC
+            """, (datalogger_id, horas))
+            
+            dados = cursor.fetchall()
+            
+            # Criar CSV
+            import io
+            output = io.StringIO()
+            output.write("timestamp,agua,estufa,externa\n")
+            
+            for row in dados:
+                output.write(f"{row['timestamp']},{row['agua']},{row['estufa']},{row['externa']}\n")
+            
+            # Enviar resposta
+            response = make_response(output.getvalue())
+            response.headers['Content-Type'] = 'text/csv'
+            response.headers['Content-Disposition'] = f'attachment; filename=datalogger_{datalogger_id}_dados.csv'
+            return response
+            
+    except Exception as e:
+        print(f"❌ Erro: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/configuracoes/datalogger/<int:equipamento_id>')
+@login_required
+def configuracoes_datalogger(equipamento_id):
+    """Página de configurações específica do datalogger"""
+    conn = db.get_connection()
+    if not conn:
+        flash('Erro de conexão com o banco de dados', 'danger')
+        return redirect(url_for('configuracoes'))
+    
+    try:
+        with conn.cursor() as cursor:  # SEM cursor_factory
+            # Verificar permissão
+            if session['usuario_tipo'] != 'admin':
+                cursor.execute("""
+                    SELECT 1 FROM dispositivos d
+                    JOIN localizacoes l ON d.localizacao_id = l.id
+                    JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
+                    WHERE d.id = %s AND ul.usuario_id = %s
+                """, (equipamento_id, session['usuario_id']))
+                
+                if not cursor.fetchone():
+                    flash('Acesso negado a este equipamento', 'danger')
+                    return redirect(url_for('configuracoes'))
+            
+            # Buscar dados do datalogger
+            cursor.execute("""
+                SELECT 
+                    d.id, d.nome, d.mac_address, d.modelo, d.descricao, d.online,
+                    d.ultima_comunicacao, d.localizacao_id,
+                    l.nome as localizacao_nome, l.tipo as localizacao_tipo,
+                    dl.intervalo_leitura, dl.quantidade_sensores
+                FROM dispositivos d
+                JOIN localizacoes l ON d.localizacao_id = l.id
+                JOIN dataloggers dl ON d.id = dl.dispositivo_id
+                WHERE d.id = %s AND d.tipo = 'datalogger'
+            """, (equipamento_id,))
+            
+            datalogger_row = cursor.fetchone()
+            
+            if not datalogger_row:
+                flash('Datalogger não encontrado', 'danger')
+                return redirect(url_for('configuracoes'))
+            
+            # Converter para dicionário
+            colunas_datalogger = ['id', 'nome', 'mac_address', 'modelo', 'descricao', 'online',
+                                  'ultima_comunicacao', 'localizacao_id', 'localizacao_nome', 
+                                  'localizacao_tipo', 'intervalo_leitura', 'quantidade_sensores']
+            datalogger = dict(zip(colunas_datalogger, datalogger_row))
+            
+            # Buscar sensores
+            cursor.execute("""
+                SELECT id, nome, tipo, unidade, posicao, endereco, ativo
+                FROM sensores
+                WHERE datalogger_id = (
+                    SELECT id FROM dataloggers WHERE dispositivo_id = %s
+                )
+                ORDER BY posicao
+            """, (equipamento_id,))
+            
+            sensores_raw = cursor.fetchall()
+            colunas_sensores = ['id', 'nome', 'tipo', 'unidade', 'posicao', 'endereco', 'ativo']
+            sensores = [dict(zip(colunas_sensores, s)) for s in sensores_raw]
+            
+            # Buscar limites de temperatura
+            cursor.execute("""
+                SELECT tipo_sensor, maximo, minimo
+                FROM limites_temperatura
+                WHERE localizacao_id = %s
+            """, (datalogger['localizacao_id'],))
+            
+            limites_raw = cursor.fetchall()
+            limites = {}
+            for limite in limites_raw:
+                limites[limite[0]] = {
+                    'max': float(limite[1]) if limite[1] else 0,
+                    'min': float(limite[2]) if limite[2] else 0
+                }
+            
+            # Buscar localizações disponíveis
+            if session['usuario_tipo'] == 'admin':
+                cursor.execute("SELECT id, nome, tipo FROM localizacoes ORDER BY nome")
+            else:
+                cursor.execute("""
+                    SELECT l.id, l.nome, l.tipo
+                    FROM localizacoes l
+                    JOIN usuario_localizacao ul ON l.id = ul.localizacao_id
+                    WHERE ul.usuario_id = %s
+                    ORDER BY l.nome
+                """, (session['usuario_id'],))
+            
+            localizacoes_raw = cursor.fetchall()
+            colunas_loc = ['id', 'nome', 'tipo']
+            localizacoes = [dict(zip(colunas_loc, loc)) for loc in localizacoes_raw]
+            
+    except Exception as e:
+        print(f"❌ Erro: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Erro ao carregar configurações', 'danger')
+        return redirect(url_for('configuracoes'))
+    finally:
+        conn.close()
+    
+    return render_template('configuracoes_datalogger.html',
+                         datalogger=datalogger,
+                         sensores=sensores,
+                         limites=limites,
+                         localizacoes=localizacoes,
+                         usuario=session)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 if __name__ == '__main__':
+    # Iniciar verificador de offline em background
+    iniciar_verificador_offline()
+    
+    # Rodar a API
     app.run(debug=True, host='0.0.0.0', port=5000)
